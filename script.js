@@ -731,9 +731,9 @@ function initOnlineSystem() {
     
     onlineUpdateInterval = setInterval(() => {
         addUserToOnline(); // Обновляем для всех посетителей
-        updateOnlineDisplay();
+        updateOnlineDisplay(); // Загружаем актуальные данные с сервера
         syncReadyUsers();
-    }, 2000); // Уменьшили интервал до 2 секунд для более быстрой синхронизации готовых игроков
+    }, 1000); // Уменьшили интервал до 1 секунды для более быстрого обновления онлайн
     
     // Обновляем онлайн при изменении видимости страницы
     document.addEventListener('visibilitychange', () => {
@@ -1236,8 +1236,53 @@ function startBunkerUpdate(event) {
 
 // === ФУНКЦИИ ДЛЯ СИСТЕМЫ ОНЛАЙН И ГОТОВЫХ ИГРОКОВ ===
 
+// Сохранение онлайн пользователя на сервер
+async function saveOnlineUserToServer(username, isGuest) {
+    try {
+        const response = await fetch(getApiUrl('saveOnlineUser'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                isGuest: isGuest
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            return true;
+        } else {
+            console.error('Ошибка сохранения онлайн на сервер:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении онлайн пользователя на сервер:', error);
+        return false;
+    }
+}
+
+// Загрузка онлайн пользователей с сервера
+async function loadOnlineUsersFromServer() {
+    try {
+        const response = await fetch(getApiUrl('getOnlineUsers'));
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.online)) {
+            return data.online;
+        } else {
+            console.error('Ошибка загрузки онлайн пользователей:', data.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('Ошибка при загрузке онлайн пользователей с сервера:', error);
+        return [];
+    }
+}
+
 // Добавление пользователя в онлайн (работает для всех, даже неавторизованных)
-function addUserToOnline() {
+async function addUserToOnline() {
     // Генерируем уникальный ID для посетителя (если не авторизован)
     let visitorId = localStorage.getItem('visitorId');
     if (!visitorId) {
@@ -1247,22 +1292,25 @@ function addUserToOnline() {
     
     // Используем имя пользователя, если авторизован, иначе visitor ID
     const displayName = currentUser ? currentUser.username : visitorId;
+    const isGuest = !currentUser;
     
-    const userKey = `online_${displayName}_${Date.now()}`;
+    // Сохраняем на сервер (не ждем завершения, чтобы не блокировать UI)
+    saveOnlineUserToServer(displayName, isGuest).catch(err => {
+        console.error('Ошибка сохранения онлайн на сервер:', err);
+    });
+    
+    // Также сохраняем локально для быстрого доступа
     const userData = {
         username: displayName,
-        isGuest: !currentUser, // Флаг для гостей
-        timestamp: Date.now(),
-        key: userKey
+        isGuest: isGuest,
+        timestamp: Date.now()
     };
     
-    // Загружаем текущий список онлайн
     const saved = localStorage.getItem('bunkerGameOnline');
     let online = [];
     if (saved) {
         try {
             online = JSON.parse(saved);
-            // Удаляем старые записи (старше 30 секунд)
             const now = Date.now();
             online = online.filter(u => (now - u.timestamp) < 30000);
         } catch(e) {
@@ -1270,7 +1318,6 @@ function addUserToOnline() {
         }
     }
     
-    // Проверяем, нет ли уже этого пользователя/посетителя
     const existingIndex = online.findIndex(u => 
         (currentUser && u.username === currentUser.username) || 
         (!currentUser && u.username === visitorId)
@@ -1286,27 +1333,55 @@ function addUserToOnline() {
 }
 
 // Обновление отображения онлайн
-function updateOnlineDisplay() {
-    const saved = localStorage.getItem('bunkerGameOnline');
-    let online = [];
-    if (saved) {
-        try {
-            online = JSON.parse(saved);
-            // Удаляем старые записи (старше 30 секунд)
-            const now = Date.now();
-            online = online.filter(u => (now - u.timestamp) < 30000);
-            localStorage.setItem('bunkerGameOnline', JSON.stringify(online));
-        } catch(e) {
-            online = [];
+async function updateOnlineDisplay() {
+    // Сначала пытаемся загрузить с сервера для актуальных данных
+    try {
+        const serverOnline = await loadOnlineUsersFromServer();
+        if (serverOnline && serverOnline.length >= 0) {
+            // Преобразуем timestamp из строки в число для совместимости
+            onlineUsers = serverOnline.map(u => ({
+                username: u.username,
+                isGuest: u.isGuest || false,
+                timestamp: typeof u.timestamp === 'string' ? new Date(u.timestamp).getTime() : u.timestamp
+            }));
+            // Синхронизируем с localStorage
+            localStorage.setItem('bunkerGameOnline', JSON.stringify(onlineUsers));
+        } else {
+            // Если сервер пуст, загружаем из localStorage
+            const saved = localStorage.getItem('bunkerGameOnline');
+            let online = [];
+            if (saved) {
+                try {
+                    online = JSON.parse(saved);
+                    const now = Date.now();
+                    online = online.filter(u => (now - u.timestamp) < 30000);
+                } catch(e) {
+                    online = [];
+                }
+            }
+            onlineUsers = online;
         }
+    } catch (error) {
+        console.error('Ошибка синхронизации онлайн с сервером, используем localStorage:', error);
+        // Fallback на localStorage
+        const saved = localStorage.getItem('bunkerGameOnline');
+        let online = [];
+        if (saved) {
+            try {
+                online = JSON.parse(saved);
+                const now = Date.now();
+                online = online.filter(u => (now - u.timestamp) < 30000);
+            } catch(e) {
+                online = [];
+            }
+        }
+        onlineUsers = online;
     }
     
     const onlineCountEl = document.getElementById('online-count');
     if (onlineCountEl) {
-        onlineCountEl.textContent = online.length;
+        onlineCountEl.textContent = onlineUsers.length;
     }
-    
-    onlineUsers = online;
 }
 
 // === API ФУНКЦИИ ДЛЯ РАБОТЫ С ГОТОВЫМИ ИГРОКАМИ ===

@@ -104,3 +104,52 @@ COMMENT ON COLUMN ready_players.timestamp IS 'Время регистрации 
 COMMENT ON COLUMN ready_players.role_mode IS 'Режим ролей (для админа)';
 COMMENT ON COLUMN ready_players.is_admin IS 'Флаг администратора';
 
+-- Создание таблицы онлайн пользователей
+CREATE TABLE IF NOT EXISTS online_users (
+  id BIGSERIAL PRIMARY KEY,
+  username TEXT NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  is_guest BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Создание индекса для быстрого поиска по username
+CREATE INDEX IF NOT EXISTS idx_online_users_username ON online_users(username);
+-- Индекс для быстрого поиска по timestamp
+CREATE INDEX IF NOT EXISTS idx_online_users_timestamp ON online_users(timestamp);
+
+-- Включение Row Level Security (RLS)
+ALTER TABLE online_users ENABLE ROW LEVEL SECURITY;
+
+-- Удаляем старые политики, если они есть
+DROP POLICY IF EXISTS "Allow public read access" ON online_users;
+DROP POLICY IF EXISTS "Allow public insert" ON online_users;
+DROP POLICY IF EXISTS "Allow public update" ON online_users;
+DROP POLICY IF EXISTS "Allow public delete" ON online_users;
+
+-- Политика: разрешить всем читать онлайн пользователей
+CREATE POLICY "Allow public read access" ON online_users
+  FOR SELECT
+  USING (true);
+
+-- Политика: разрешить всем добавлять онлайн пользователей
+CREATE POLICY "Allow public insert" ON online_users
+  FOR INSERT
+  WITH CHECK (true);
+
+-- Политика: разрешить всем обновлять онлайн пользователей
+CREATE POLICY "Allow public update" ON online_users
+  FOR UPDATE
+  USING (true);
+
+-- Политика: разрешить всем удалять онлайн пользователей
+CREATE POLICY "Allow public delete" ON online_users
+  FOR DELETE
+  USING (true);
+
+-- Комментарии к таблице
+COMMENT ON TABLE online_users IS 'Таблица онлайн пользователей для игры Bunker';
+COMMENT ON COLUMN online_users.username IS 'Имя пользователя или visitor ID';
+COMMENT ON COLUMN online_users.timestamp IS 'Время последней активности';
+COMMENT ON COLUMN online_users.is_guest IS 'Флаг гостя (неавторизованный пользователь)';
+
