@@ -500,9 +500,17 @@ async function handleRegister() {
     }
 }
 
-function handleLogout() {
+async function handleLogout() {
     // Удаляем пользователя из готовых
     if (currentUser) {
+        // Удаляем с сервера
+        try {
+            await saveReadyPlayerToServer('remove', { username: currentUser.username });
+        } catch (error) {
+            console.error('Ошибка удаления готовности с сервера при выходе:', error);
+        }
+        
+        // Удаляем из localStorage
         const saved = localStorage.getItem('bunkerGameReady');
         if (saved) {
             try {
@@ -715,6 +723,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Очистка готовности при выходе пользователя
+async function clearReadyOnExit() {
+    if (currentUser) {
+        try {
+            // Удаляем из готовых на сервере
+            await saveReadyPlayerToServer('remove', { username: currentUser.username });
+            console.log('Готовность очищена при выходе:', currentUser.username);
+        } catch (error) {
+            console.error('Ошибка очистки готовности при выходе:', error);
+        }
+    }
+}
+
 // Инициализация системы онлайн
 function initOnlineSystem() {
     // Добавляем посетителя в онлайн (работает для всех, даже неавторизованных)
@@ -736,12 +757,44 @@ function initOnlineSystem() {
     }, 1000); // Уменьшили интервал до 1 секунды для более быстрого обновления онлайн
     
     // Обновляем онлайн при изменении видимости страницы
+    let visibilityTimeout = null;
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
+            // Пользователь вернулся на страницу
+            if (visibilityTimeout) {
+                clearTimeout(visibilityTimeout);
+                visibilityTimeout = null;
+            }
             addUserToOnline();
             updateOnlineDisplay();
             syncReadyUsers();
+        } else {
+            // Пользователь ушел со страницы - через 5 секунд очищаем готовность
+            visibilityTimeout = setTimeout(() => {
+                clearReadyOnExit();
+            }, 5000);
         }
+    });
+    
+    // Очистка готовности при закрытии/перезагрузке страницы
+    window.addEventListener('beforeunload', () => {
+        // Используем navigator.sendBeacon для надежной отправки запроса
+        if (currentUser && navigator.sendBeacon) {
+            const data = JSON.stringify({
+                action: 'remove',
+                player: { username: currentUser.username }
+            });
+            const blob = new Blob([data], { type: 'application/json' });
+            navigator.sendBeacon(getApiUrl('saveReadyPlayer'), blob);
+        } else if (currentUser) {
+            // Fallback для старых браузеров - синхронный запрос (может не сработать)
+            clearReadyOnExit();
+        }
+    });
+    
+    // Дополнительная очистка при полной выгрузке страницы
+    window.addEventListener('unload', () => {
+        clearReadyOnExit();
     });
     
     // Синхронизация готовых игроков между вкладками через событие storage
@@ -1335,19 +1388,29 @@ async function addUserToOnline() {
 // Обновление отображения онлайн
 async function updateOnlineDisplay() {
     // Сначала пытаемся загрузить с сервера для актуальных данных
+    // Важно: показываем только тех, кто реально на сайте (из таблицы online_users)
     try {
         const serverOnline = await loadOnlineUsersFromServer();
-        if (serverOnline && serverOnline.length >= 0) {
+        if (serverOnline && Array.isArray(serverOnline)) {
             // Преобразуем timestamp из строки в число для совместимости
-            onlineUsers = serverOnline.map(u => ({
-                username: u.username,
-                isGuest: u.isGuest || false,
-                timestamp: typeof u.timestamp === 'string' ? new Date(u.timestamp).getTime() : u.timestamp
-            }));
+            // Фильтруем только активных пользователей (активность за последние 30 секунд)
+            const now = Date.now();
+            onlineUsers = serverOnline
+                .map(u => ({
+                    username: u.username,
+                    isGuest: u.isGuest || false,
+                    timestamp: typeof u.timestamp === 'string' ? new Date(u.timestamp).getTime() : u.timestamp
+                }))
+                .filter(u => {
+                    // Проверяем, что timestamp не старше 30 секунд
+                    const timestampMs = typeof u.timestamp === 'number' ? u.timestamp : new Date(u.timestamp).getTime();
+                    return (now - timestampMs) < 30000;
+                });
+            
             // Синхронизируем с localStorage
             localStorage.setItem('bunkerGameOnline', JSON.stringify(onlineUsers));
         } else {
-            // Если сервер пуст, загружаем из localStorage
+            // Если сервер пуст или вернул не массив, загружаем из localStorage
             const saved = localStorage.getItem('bunkerGameOnline');
             let online = [];
             if (saved) {
@@ -1380,6 +1443,7 @@ async function updateOnlineDisplay() {
     
     const onlineCountEl = document.getElementById('online-count');
     if (onlineCountEl) {
+        // Показываем количество реальных посетителей сайта, а не зарегистрированных пользователей
         onlineCountEl.textContent = onlineUsers.length;
     }
 }

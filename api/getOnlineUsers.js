@@ -28,6 +28,7 @@ export default async function handler(req, res) {
         }
 
         // Запрос к Supabase - получаем онлайн пользователей (активные за последние 30 секунд)
+        // Важно: получаем только из таблицы online_users, а не из users!
         const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
         const response = await fetch(`${supabaseUrl}/rest/v1/online_users?timestamp=gt.${thirtySecondsAgo}&select=username,timestamp,is_guest&order=timestamp.desc`, {
             method: 'GET',
