@@ -722,6 +722,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('auth-register-email')?.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleRegister();
     });
+    
+    // Закрытие модального окна онлайн пользователей при клике вне его
+    const onlineModal = document.getElementById('online-modal');
+    if (onlineModal) {
+        onlineModal.addEventListener('click', (e) => {
+            if (e.target === onlineModal) {
+                closeOnlineModal();
+            }
+        });
+    }
 });
 
 // Очистка готовности при выходе пользователя
@@ -1543,6 +1553,121 @@ async function updateOnlineDisplay() {
             onlineCountEl.textContent = authorizedUsers.length;
         }
     }
+}
+
+// === ФУНКЦИИ ДЛЯ ОТОБРАЖЕНИЯ СПИСКА ОНЛАЙН ПОЛЬЗОВАТЕЛЕЙ ===
+
+// Показать модальное окно со списком онлайн пользователей
+async function showOnlineUsers() {
+    const modal = document.getElementById('online-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        await refreshOnlineUsers();
+    }
+}
+
+// Закрыть модальное окно со списком онлайн пользователей
+function closeOnlineModal() {
+    const modal = document.getElementById('online-modal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Обновить список онлайн пользователей
+async function refreshOnlineUsers() {
+    const container = document.getElementById('online-users-list');
+    if (!container) return;
+    
+    container.innerHTML = '<div class="online-loading">Загрузка...</div>';
+    
+    try {
+        // Загружаем актуальные данные с сервера
+        await updateOnlineDisplay();
+        
+        // Получаем список онлайн пользователей
+        const serverOnline = await loadOnlineUsersFromServer();
+        
+        if (serverOnline && Array.isArray(serverOnline)) {
+            const now = Date.now();
+            let allOnline = serverOnline
+                .map(u => ({
+                    username: u.username,
+                    isGuest: u.isGuest || false,
+                    timestamp: typeof u.timestamp === 'string' ? new Date(u.timestamp).getTime() : u.timestamp
+                }))
+                .filter(u => {
+                    const timestampMs = typeof u.timestamp === 'number' ? u.timestamp : new Date(u.timestamp).getTime();
+                    return (now - timestampMs) < 30000;
+                });
+            
+            // Убираем дубликаты по username
+            const uniqueUsers = new Map();
+            allOnline.forEach(u => {
+                const existing = uniqueUsers.get(u.username);
+                if (!existing || u.timestamp > existing.timestamp) {
+                    uniqueUsers.set(u.username, u);
+                }
+            });
+            
+            const onlineList = Array.from(uniqueUsers.values());
+            
+            // Разделяем на авторизованных и гостей
+            const authorizedUsers = onlineList.filter(u => !u.isGuest);
+            const guests = onlineList.filter(u => u.isGuest);
+            
+            if (onlineList.length === 0) {
+                container.innerHTML = '<div class="online-empty">Нет пользователей онлайн</div>';
+                return;
+            }
+            
+            let html = '';
+            
+            // Показываем авторизованных пользователей
+            if (authorizedUsers.length > 0) {
+                html += '<div class="online-section">';
+                html += `<div class="online-section-title">Авторизованные пользователи (${authorizedUsers.length}):</div>`;
+                html += '<div class="online-users-grid">';
+                authorizedUsers.forEach(user => {
+                    const timeAgo = Math.floor((now - user.timestamp) / 1000);
+                    html += `<div class="online-user-item">
+                        <span class="online-user-name">${escapeHtml(user.username)}</span>
+                        <span class="online-user-time">${timeAgo} сек назад</span>
+                    </div>`;
+                });
+                html += '</div></div>';
+            }
+            
+            // Показываем гостей
+            if (guests.length > 0) {
+                html += '<div class="online-section">';
+                html += `<div class="online-section-title">Гости (${guests.length}):</div>`;
+                html += '<div class="online-users-grid">';
+                guests.forEach(user => {
+                    const timeAgo = Math.floor((now - user.timestamp) / 1000);
+                    html += `<div class="online-user-item online-user-guest">
+                        <span class="online-user-name">${escapeHtml(user.username)}</span>
+                        <span class="online-user-time">${timeAgo} сек назад</span>
+                    </div>`;
+                });
+                html += '</div></div>';
+            }
+            
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = '<div class="online-empty">Ошибка загрузки данных</div>';
+        }
+    } catch (error) {
+        console.error('Ошибка при загрузке списка онлайн пользователей:', error);
+        container.innerHTML = '<div class="online-empty">Ошибка загрузки данных</div>';
+    }
+}
+
+// Функция для экранирования HTML (защита от XSS)
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 // === API ФУНКЦИИ ДЛЯ РАБОТЫ С ГОТОВЫМИ ИГРОКАМИ ===

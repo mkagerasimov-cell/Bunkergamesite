@@ -22,6 +22,23 @@
         </div>
     </div>
 
+    <!-- МОДАЛКА СПИСКА ОНЛАЙН ПОЛЬЗОВАТЕЛЕЙ -->
+    <div class="online-modal-overlay" id="online-modal">
+        <div class="online-modal-box liquid-glass blue-top-glow" onclick="event.stopPropagation()">
+            <div class="online-modal-header">
+                <h2 class="online-modal-title">👥 ОНЛАЙН ПОЛЬЗОВАТЕЛИ</h2>
+                <button class="online-close-btn" onclick="closeOnlineModal()">✕</button>
+            </div>
+            <div class="online-users-container" id="online-users-list">
+                <div class="online-loading">Загрузка...</div>
+            </div>
+            <div class="online-modal-footer">
+                <button class="online-refresh-btn" onclick="refreshOnlineUsers()">🔄 Обновить</button>
+                <button class="online-close-btn-footer" onclick="closeOnlineModal()">ЗАКРЫТЬ</button>
+            </div>
+        </div>
+    </div>
+
     <!-- МОДАЛКА АВТОРИЗАЦИИ/РЕГИСТРАЦИИ -->
     <div class="auth-modal-overlay" id="auth-modal">
         <div class="auth-modal-box liquid-glass blue-top-glow" onclick="event.stopPropagation()">
@@ -377,6 +394,7 @@
                     <button class="admin-action-btn" onclick="openEditModal()" title="Редактировать списки">✏️ Редактировать</button>
                     <button class="admin-action-btn" onclick="goToInfo()">📋 Информация</button>
                     <button class="admin-action-btn" onclick="forceStartGame()" title="Досрочно начать игру">🎮 Начать игру</button>
+                    <button class="admin-action-btn" onclick="showOnlineUsers()" title="Показать список онлайн пользователей">👥 Онлайн</button>
                 </div>
                 
                 <div class="admin-stats">
