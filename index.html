@@ -167,7 +167,7 @@
             </div>
             <div class="header-title">BUNKER TOOL</div>
             <div class="nav-group-right">
-                <div class="nav-text" onclick="openEditModal()" title="Редактировать списки">✏️ Редактировать</div><div class="nav-text" onclick="goToRules()">Правила</div><div class="nav-text" onclick="goToInfo()">Информация</div><div class="nav-text" id="admin-nav-btn" onclick="goToAdmin()" title="Администрирование" style="display: none;">👤 Админка</div><div style="font-size:1.4rem; cursor:pointer;">⚙</div>
+                <div class="nav-text" onclick="goToRules()">Правила</div><div class="nav-text" id="admin-nav-btn" onclick="goToAdmin()" title="Администрирование" style="display: none;">👤 Админка</div><div style="font-size:1.4rem; cursor:pointer;">⚙</div>
             </div>
         </header>
     </div>
@@ -370,6 +370,12 @@
         <div class="admin-container">
             <div class="admin-box liquid-glass blue-top-glow">
                 <h2 class="admin-title">👤 АДМИНИСТРИРОВАНИЕ ПОЛЬЗОВАТЕЛЕЙ</h2>
+                
+                <!-- Кнопки для админа -->
+                <div class="admin-actions" style="margin-bottom: 20px;">
+                    <button class="admin-action-btn" onclick="openEditModal()" title="Редактировать списки">✏️ Редактировать</button>
+                    <button class="admin-action-btn" onclick="goToInfo()">📋 Информация</button>
+                </div>
                 
                 <div class="admin-stats">
                     <div class="admin-stat-item">
