@@ -312,17 +312,35 @@ function handleLogin() {
 async function handleRegister() {
     console.log('=== НАЧАЛО РЕГИСТРАЦИИ ===');
     
-    const username = document.getElementById('auth-register-username').value.trim();
-    const password = document.getElementById('auth-register-password').value.trim();
-    const email = document.getElementById('auth-register-email').value.trim();
+    // Получаем элементы формы
+    const usernameEl = document.getElementById('auth-register-username');
+    const passwordEl = document.getElementById('auth-register-password');
+    const emailEl = document.getElementById('auth-register-email');
     const messageEl = document.getElementById('auth-register-message');
     
+    // Проверяем, что элементы существуют
+    if (!usernameEl || !passwordEl || !emailEl || !messageEl) {
+        console.error('Ошибка: элементы формы не найдены!', {
+            usernameEl: !!usernameEl,
+            passwordEl: !!passwordEl,
+            emailEl: !!emailEl,
+            messageEl: !!messageEl
+        });
+        alert('Ошибка: форма регистрации не найдена. Перезагрузите страницу.');
+        return;
+    }
+    
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value.trim();
+    const email = emailEl.value.trim();
+    
     console.log('Данные формы:', { username, password: '***', email });
+    console.log('Длина полей:', { username: username.length, password: password.length, email: email.length });
     
     if (!username || !password || !email) {
         messageEl.textContent = 'Заполните все поля!';
         messageEl.className = 'auth-message error';
-        console.log('Ошибка: не все поля заполнены');
+        console.log('Ошибка: не все поля заполнены', { username: !!username, password: !!password, email: !!email });
         return;
     }
     
@@ -340,14 +358,29 @@ async function handleRegister() {
     messageEl.className = 'auth-message';
     
     try {
-        // Проверка, существует ли пользователь (проверяем и на сервере, и локально)
-        console.log('Загрузка пользователей с сервера...');
-        await loadUsersFromServer(); // Обновляем список перед проверкой
+        // Проверка, существует ли пользователь (проверяем локально и на сервере)
+        console.log('Проверка существования пользователя...');
         
+        // Сначала проверяем локально (быстрее)
         if (usersData.find(u => u.username === username)) {
             messageEl.textContent = 'Пользователь с таким логином уже существует!';
             messageEl.className = 'auth-message error';
-            console.log('Ошибка: пользователь уже существует');
+            console.log('Ошибка: пользователь уже существует (локально)');
+            return;
+        }
+        
+        // Пытаемся загрузить с сервера для проверки (но не блокируем, если не получится)
+        console.log('Загрузка пользователей с сервера...');
+        const serverLoaded = await loadUsersFromServer().catch(err => {
+            console.warn('Не удалось загрузить с сервера, продолжаем с локальными данными:', err);
+            return false;
+        });
+        
+        // Проверяем еще раз после загрузки с сервера
+        if (usersData.find(u => u.username === username)) {
+            messageEl.textContent = 'Пользователь с таким логином уже существует!';
+            messageEl.className = 'auth-message error';
+            console.log('Ошибка: пользователь уже существует (на сервере)');
             return;
         }
         
@@ -375,6 +408,8 @@ async function handleRegister() {
             messageEl.className = 'auth-message success';
         } else {
             console.log('Пользователь успешно сохранен на сервер');
+            // Обновляем локальный список после успешного сохранения
+            await loadUsersFromServer().catch(() => {});
             messageEl.textContent = 'Регистрация успешна! Теперь вы можете войти.';
             messageEl.className = 'auth-message success';
         }
@@ -384,20 +419,28 @@ async function handleRegister() {
         console.log('Всего пользователей в системе:', usersData.length);
         
         // Очищаем поля
-        document.getElementById('auth-register-username').value = '';
-        document.getElementById('auth-register-password').value = '';
-        document.getElementById('auth-register-email').value = '';
+        if (usernameEl) usernameEl.value = '';
+        if (passwordEl) passwordEl.value = '';
+        if (emailEl) emailEl.value = '';
         
         // Переключаемся на вкладку входа
         setTimeout(() => {
             switchAuthTab('login');
-            document.getElementById('auth-login-username').value = username;
+            const loginUsernameEl = document.getElementById('auth-login-username');
+            if (loginUsernameEl) {
+                loginUsernameEl.value = username;
+            }
         }, 1500);
         
         console.log('=== РЕГИСТРАЦИЯ ЗАВЕРШЕНА ===');
     } catch (error) {
         console.error('Ошибка при регистрации:', error);
-        messageEl.textContent = 'Ошибка при регистрации: ' + error.message;
+        console.error('Детали ошибки:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        messageEl.textContent = 'Ошибка при регистрации: ' + (error.message || 'Неизвестная ошибка');
         messageEl.className = 'auth-message error';
     }
 }
