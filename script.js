@@ -508,24 +508,26 @@ document.addEventListener('DOMContentLoaded', () => {
     initOnlineSystem();
     
     // Слушаем обновления данных пользователей из других вкладок
-    window.addEventListener('usersDataUpdated', async () => {
+    window.addEventListener('usersDataUpdated', () => {
         console.log('Получено событие обновления пользователей из другой вкладки');
-        await loadUsersData();
-        // Если админка открыта, обновляем её
-        if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
-            await refreshAdminData();
-        }
+        loadUsersData().then(() => {
+            // Если админка открыта, обновляем её
+            if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
+                refreshAdminData();
+            }
+        });
     });
     
     // Слушаем изменения в localStorage (для синхронизации между вкладками)
-    window.addEventListener('storage', async (e) => {
+    window.addEventListener('storage', (e) => {
         if (e.key === 'bunkerGameUsers') {
             console.log('Обнаружено изменение localStorage для пользователей');
-            await loadUsersData();
-            // Если админка открыта, обновляем её
-            if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
-                await refreshAdminData();
-            }
+            loadUsersData().then(() => {
+                // Если админка открыта, обновляем её
+                if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
+                    refreshAdminData();
+                }
+            });
         }
     });
     
@@ -1637,12 +1639,12 @@ function goToAdmin() {
     document.querySelector('.bg-start')?.classList.add('active');
     
     // Загружаем актуальные данные перед генерацией контента
-    await loadUsersData();
-    
-    // Генерируем контент админки
-    setTimeout(async () => {
-        await refreshAdminData();
-    }, 100);
+    loadUsersData().then(() => {
+        // Генерируем контент админки
+        setTimeout(async () => {
+            await refreshAdminData();
+        }, 100);
+    });
     
     // Устанавливаем автоматическое обновление каждые 3 секунды
     if (window.adminRefreshInterval) {
