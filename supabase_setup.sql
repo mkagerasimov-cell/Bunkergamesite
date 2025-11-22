@@ -110,7 +110,8 @@ CREATE TABLE IF NOT EXISTS online_users (
   username TEXT NOT NULL,
   timestamp TIMESTAMPTZ DEFAULT NOW(),
   is_guest BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(username) -- Уникальное ограничение на username для предотвращения дубликатов
 );
 
 -- Создание индекса для быстрого поиска по username

@@ -1449,7 +1449,7 @@ async function updateOnlineDisplay() {
             // Преобразуем timestamp из строки в число для совместимости
             // Фильтруем только активных пользователей (активность за последние 30 секунд)
             const now = Date.now();
-            onlineUsers = serverOnline
+            let allOnline = serverOnline
                 .map(u => ({
                     username: u.username,
                     isGuest: u.isGuest || false,
@@ -1461,8 +1461,27 @@ async function updateOnlineDisplay() {
                     return (now - timestampMs) < 30000;
                 });
             
+            // Убираем дубликаты по username (берем самую свежую запись)
+            const uniqueUsers = new Map();
+            allOnline.forEach(u => {
+                const existing = uniqueUsers.get(u.username);
+                if (!existing || u.timestamp > existing.timestamp) {
+                    uniqueUsers.set(u.username, u);
+                }
+            });
+            onlineUsers = Array.from(uniqueUsers.values());
+            
+            // Фильтруем только авторизованных пользователей (не гостей) для счетчика
+            const authorizedUsers = onlineUsers.filter(u => !u.isGuest);
+            
             // Синхронизируем с localStorage
             localStorage.setItem('bunkerGameOnline', JSON.stringify(onlineUsers));
+            
+            const onlineCountEl = document.getElementById('online-count');
+            if (onlineCountEl) {
+                // Показываем только количество авторизованных пользователей (без гостей)
+                onlineCountEl.textContent = authorizedUsers.length;
+            }
         } else {
             // Если сервер пуст или вернул не массив, загружаем из localStorage
             const saved = localStorage.getItem('bunkerGameOnline');
@@ -1477,6 +1496,21 @@ async function updateOnlineDisplay() {
                 }
             }
             onlineUsers = online;
+            
+            // Убираем дубликаты и фильтруем только авторизованных
+            const uniqueUsers = new Map();
+            onlineUsers.forEach(u => {
+                const existing = uniqueUsers.get(u.username);
+                if (!existing || u.timestamp > existing.timestamp) {
+                    uniqueUsers.set(u.username, u);
+                }
+            });
+            const authorizedUsers = Array.from(uniqueUsers.values()).filter(u => !u.isGuest);
+            
+            const onlineCountEl = document.getElementById('online-count');
+            if (onlineCountEl) {
+                onlineCountEl.textContent = authorizedUsers.length;
+            }
         }
     } catch (error) {
         console.error('Ошибка синхронизации онлайн с сервером, используем localStorage:', error);
@@ -1493,12 +1527,21 @@ async function updateOnlineDisplay() {
             }
         }
         onlineUsers = online;
-    }
-    
-    const onlineCountEl = document.getElementById('online-count');
-    if (onlineCountEl) {
-        // Показываем количество реальных посетителей сайта, а не зарегистрированных пользователей
-        onlineCountEl.textContent = onlineUsers.length;
+        
+        // Убираем дубликаты и фильтруем только авторизованных
+        const uniqueUsers = new Map();
+        onlineUsers.forEach(u => {
+            const existing = uniqueUsers.get(u.username);
+            if (!existing || u.timestamp > existing.timestamp) {
+                uniqueUsers.set(u.username, u);
+            }
+        });
+        const authorizedUsers = Array.from(uniqueUsers.values()).filter(u => !u.isGuest);
+        
+        const onlineCountEl = document.getElementById('online-count');
+        if (onlineCountEl) {
+            onlineCountEl.textContent = authorizedUsers.length;
+        }
     }
 }
 
