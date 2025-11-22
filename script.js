@@ -511,6 +511,16 @@ function updateAuthUI() {
             }
         }
         
+        // Показываем/скрываем кнопку "Активные роли" только для админов
+        const rolesMenuBtn = document.getElementById('roles-menu-btn');
+        if (rolesMenuBtn) {
+            if (currentUser.isAdmin) {
+                rolesMenuBtn.style.display = 'flex';
+            } else {
+                rolesMenuBtn.style.display = 'none';
+            }
+        }
+        
         // Обновляем онлайн при авторизации (теперь с именем пользователя)
         addUserToOnline();
         updateOnlineDisplay();
@@ -534,6 +544,12 @@ function updateAuthUI() {
         // Скрываем кнопку админки
         if (adminBtn) {
             adminBtn.style.display = 'none';
+        }
+        
+        // Скрываем кнопку "Активные роли" для неавторизованных
+        const rolesMenuBtn = document.getElementById('roles-menu-btn');
+        if (rolesMenuBtn) {
+            rolesMenuBtn.style.display = 'none';
         }
     }
 }
