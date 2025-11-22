@@ -708,6 +708,14 @@ function initOnlineSystem() {
             syncReadyUsers();
         }
     });
+    
+    // Синхронизация готовых игроков между вкладками через событие storage
+    window.addEventListener('storage', (e) => {
+        if (e.key === 'bunkerGameReady') {
+            console.log('Обнаружено изменение готовых игроков в другой вкладке');
+            syncReadyUsers();
+        }
+    });
 }
 
 // Загрузка сохраненных списков из localStorage
@@ -1369,6 +1377,8 @@ function addAdminToReady() {
     
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
     readyUsers = ready;
+    console.log('Данные админа сохранены в localStorage:', ready);
+    
     updateReadyDisplay();
     checkIfCanStart();
     
@@ -1386,16 +1396,19 @@ function updateReadyDisplay() {
         try {
             ready = JSON.parse(saved);
         } catch(e) {
+            console.error('Ошибка парсинга готовых игроков:', e);
             ready = [];
         }
     }
     
+    // Обновляем глобальный массив
+    readyUsers = ready;
+    
     const readyCountEl = document.getElementById('ready-count-display');
     if (readyCountEl) {
         readyCountEl.textContent = ready.length;
+        console.log('Обновлено отображение готовых:', ready.length, ready);
     }
-    
-    readyUsers = ready;
 }
 
 // Проверка, можно ли начать игру
@@ -1481,6 +1494,18 @@ function removeReadyMessage(username) {
 
 // Синхронизация готовых игроков (для всех пользователей)
 function syncReadyUsers() {
+    // Сначала загружаем актуальные данные из localStorage
+    const saved = localStorage.getItem('bunkerGameReady');
+    let ready = [];
+    if (saved) {
+        try {
+            ready = JSON.parse(saved);
+        } catch(e) {
+            ready = [];
+        }
+    }
+    readyUsers = ready; // Обновляем глобальный массив
+    
     updateReadyDisplay();
     checkIfCanStart();
     
@@ -1860,12 +1885,14 @@ function forceStartGame() {
         selectedRoleMode = "Без них"; // Режим по умолчанию
     }
     
+    // Скрываем админку перед переходом на страницу игры
+    document.getElementById('page-5')?.classList.add('page-hidden');
+    document.getElementById('header-group-1')?.classList.remove('headers-visible');
+    document.getElementById('header-group-1')?.classList.add('headers-hidden');
+    
     // Генерируем лобби и показываем экран
     generateLobby();
     showLobbyScreen();
-    
-    // Закрываем админку после начала игры
-    goToMain();
     
     alert('Игра начата досрочно администратором!');
 }
