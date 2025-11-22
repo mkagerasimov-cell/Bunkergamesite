@@ -698,7 +698,7 @@ function initOnlineSystem() {
         addUserToOnline(); // Обновляем для всех посетителей
         updateOnlineDisplay();
         syncReadyUsers();
-    }, 5000);
+    }, 2000); // Уменьшили интервал до 2 секунд для более быстрой синхронизации готовых игроков
     
     // Обновляем онлайн при изменении видимости страницы
     document.addEventListener('visibilitychange', () => {
@@ -1316,6 +1316,9 @@ function addUserToReady() {
     updateReadyDisplay();
     checkIfCanStart();
     
+    // Синхронизируем сразу после изменения для других пользователей
+    syncReadyUsers();
+    
     return true;
 }
 
@@ -1368,6 +1371,9 @@ function addAdminToReady() {
     readyUsers = ready;
     updateReadyDisplay();
     checkIfCanStart();
+    
+    // Синхронизируем сразу после изменения для других пользователей
+    syncReadyUsers();
     
     return true;
 }
@@ -1857,6 +1863,9 @@ function forceStartGame() {
     // Генерируем лобби и показываем экран
     generateLobby();
     showLobbyScreen();
+    
+    // Закрываем админку после начала игры
+    goToMain();
     
     alert('Игра начата досрочно администратором!');
 }
