@@ -541,6 +541,27 @@ function updateAuthUI() {
             }
         }
         
+        // Показываем/скрываем кнопку готовности админа
+        const adminReadyBtn = document.getElementById('admin-ready-btn');
+        const startBtn = document.getElementById('start-btn');
+        if (currentUser.isAdmin) {
+            // Для админа показываем кнопку готовности и меняем текст START GAME
+            if (adminReadyBtn) {
+                adminReadyBtn.style.display = 'block';
+            }
+            if (startBtn) {
+                startBtn.textContent = 'НАЧАТЬ ИГРУ';
+            }
+        } else {
+            // Для обычных пользователей скрываем кнопку готовности админа
+            if (adminReadyBtn) {
+                adminReadyBtn.style.display = 'none';
+            }
+            if (startBtn) {
+                startBtn.textContent = 'START GAME';
+            }
+        }
+        
         // Обновляем онлайн при авторизации (теперь с именем пользователя)
         addUserToOnline();
         updateOnlineDisplay();
@@ -580,6 +601,18 @@ function updateAuthUI() {
         // Скрываем кнопку админки
         if (adminBtn) {
             adminBtn.style.display = 'none';
+        }
+        
+        // Скрываем кнопку готовности админа
+        const adminReadyBtn = document.getElementById('admin-ready-btn');
+        if (adminReadyBtn) {
+            adminReadyBtn.style.display = 'none';
+        }
+        
+        // Возвращаем текст кнопки START GAME к исходному
+        const startBtn = document.getElementById('start-btn');
+        if (startBtn) {
+            startBtn.textContent = 'START GAME';
         }
         
         // Скрываем кнопку "Активные роли" для неавторизованных
@@ -1233,19 +1266,19 @@ function updateOnlineDisplay() {
     onlineUsers = online;
 }
 
-// Добавление пользователя в готовые
+// Добавление пользователя в готовые (для обычных пользователей, без проверки ролей)
 function addUserToReady() {
     if (!currentUser) {
         alert('Сначала авторизуйтесь!');
         return false;
     }
     
-    if (selectedRoleMode === "") {
-        alert('Выберите режим ролей!');
-        const rolesMenu = document.getElementById('roles-menu');
-        if (rolesMenu) {
-            rolesMenu.classList.add('show');
-        }
+    // Проверяем, не является ли пользователь админом
+    const userInData = usersData.find(u => u.username === currentUser.username);
+    const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+    if (isAdmin) {
+        // Админ должен использовать отдельную кнопку готовности
+        alert('Администратор должен использовать кнопку "ГОТОВ" для регистрации готовности!');
         return false;
     }
     
@@ -1268,15 +1301,67 @@ function addUserToReady() {
         removeReadyMessage(currentUser.username);
         console.log('Пользователь удален из готовых:', currentUser.username);
     } else {
-        // Добавляем пользователя
+        // Добавляем пользователя (без roleMode для обычных пользователей)
         const userData = {
             username: currentUser.username,
-            timestamp: Date.now(),
-            roleMode: selectedRoleMode
+            timestamp: Date.now()
         };
         ready.push(userData);
         addReadyMessage(currentUser.username);
         console.log('Пользователь добавлен в готовые:', userData);
+    }
+    
+    localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
+    readyUsers = ready;
+    updateReadyDisplay();
+    checkIfCanStart();
+    
+    return true;
+}
+
+// Добавление админа в готовые (отдельная функция)
+function addAdminToReady() {
+    if (!currentUser) {
+        alert('Сначала авторизуйтесь!');
+        return false;
+    }
+    
+    // Проверяем, является ли пользователь админом
+    const userInData = usersData.find(u => u.username === currentUser.username);
+    const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+    if (!isAdmin) {
+        alert('Эта кнопка только для администратора!');
+        return false;
+    }
+    
+    // Загружаем текущий список готовых
+    const saved = localStorage.getItem('bunkerGameReady');
+    let ready = [];
+    if (saved) {
+        try {
+            ready = JSON.parse(saved);
+        } catch(e) {
+            ready = [];
+        }
+    }
+    
+    // Проверяем, нет ли уже этого пользователя
+    const existingIndex = ready.findIndex(u => u.username === currentUser.username);
+    if (existingIndex !== -1) {
+        // Админ уже готов, убираем его
+        ready.splice(existingIndex, 1);
+        removeReadyMessage(currentUser.username);
+        console.log('Админ удален из готовых:', currentUser.username);
+    } else {
+        // Добавляем админа (без roleMode, он будет установлен при начале игры)
+        const userData = {
+            username: currentUser.username,
+            timestamp: Date.now(),
+            isAdmin: true
+        };
+        ready.push(userData);
+        addReadyMessage(currentUser.username);
+        console.log('Админ добавлен в готовые:', userData);
     }
     
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
@@ -1310,17 +1395,39 @@ function updateReadyDisplay() {
 // Проверка, можно ли начать игру
 function checkIfCanStart() {
     const count = readyUsers.length;
-    if (count >= 4 && count <= 16) {
-        // Можно начать игру
-        const btn = document.getElementById('start-btn');
-        if (btn) {
+    const btn = document.getElementById('start-btn');
+    
+    if (!btn) return;
+    
+    // Проверяем, является ли текущий пользователь админом
+    if (!currentUser) {
+        btn.textContent = 'START GAME';
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        return;
+    }
+    
+    const userInData = usersData.find(u => u.username === currentUser.username);
+    const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+    
+    if (isAdmin) {
+        // Для админа кнопка всегда "НАЧАТЬ ИГРУ"
+        if (count >= 4 && count <= 16) {
             btn.textContent = `НАЧАТЬ ИГРУ (${count} готовы)`;
             btn.style.background = 'rgba(0, 255, 65, 0.2)';
             btn.style.borderColor = '#00ff41';
+        } else {
+            btn.textContent = `НАЧАТЬ ИГРУ (${count} готовы, нужно 4-16)`;
+            btn.style.background = '';
+            btn.style.borderColor = '';
         }
     } else {
-        const btn = document.getElementById('start-btn');
-        if (btn) {
+        // Для обычных пользователей
+        if (count >= 4 && count <= 16) {
+            btn.textContent = `START GAME (${count} готовы)`;
+            btn.style.background = 'rgba(0, 255, 65, 0.2)';
+            btn.style.borderColor = '#00ff41';
+        } else {
             btn.textContent = 'START GAME';
             btn.style.background = '';
             btn.style.borderColor = '';
@@ -1393,67 +1500,53 @@ function attemptStartGame() {
         return;
     }
     
-    if (selectedRoleMode === "") {
-        const btn = document.getElementById('start-btn');
-        btn.classList.add('shake-btn');
-        const rolesMenu = document.getElementById('roles-menu');
-        if (rolesMenu) {
-            rolesMenu.classList.add('show');
+    // Проверяем, является ли пользователь админом
+    const userInData = usersData.find(u => u.username === currentUser.username);
+    const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+    
+    if (isAdmin) {
+        // Для админа - это начало игры
+        // Проверяем, выбран ли режим ролей
+        if (selectedRoleMode === "") {
+            const btn = document.getElementById('start-btn');
+            btn.classList.add('shake-btn');
+            const rolesMenu = document.getElementById('roles-menu');
+            if (rolesMenu) {
+                rolesMenu.classList.add('show');
+            }
+            setTimeout(() => { btn.classList.remove('shake-btn'); }, 400);
+            alert('Сначала выберите режим ролей!');
+            return;
         }
-        setTimeout(() => { btn.classList.remove('shake-btn'); }, 400);
-        alert('Сначала выберите режим ролей!');
-        return;
-    }
-    
-    // Добавляем/убираем пользователя из готовых
-    const added = addUserToReady();
-    
-    if (!added) {
-        // Если не удалось добавить (например, не выбран режим ролей), выходим
-        return;
-    }
-    
-    // Обновляем список готовых после добавления (addUserToReady уже обновляет, но на всякий случай)
-    const saved = localStorage.getItem('bunkerGameReady');
-    let ready = [];
-    if (saved) {
-        try {
-            ready = JSON.parse(saved);
-        } catch(e) {
-            ready = [];
+        
+        // Загружаем список готовых
+        const saved = localStorage.getItem('bunkerGameReady');
+        let ready = [];
+        if (saved) {
+            try {
+                ready = JSON.parse(saved);
+            } catch(e) {
+                ready = [];
+            }
         }
-    }
-    readyUsers = ready;
-    
-    // Проверяем, был ли пользователь добавлен
-    const userInReady = ready.find(u => u.username === currentUser.username);
-    if (userInReady) {
-        console.log('Пользователь добавлен в готовые:', userInReady);
-        // Показываем сообщение пользователю
-        const messagesContainer = document.getElementById('ready-messages');
-        if (messagesContainer) {
-            // Сообщение уже добавлено в addUserToReady, но убедимся что оно видно
-            setTimeout(() => {
-                updateReadyDisplay();
-                checkIfCanStart();
-            }, 100);
+        readyUsers = ready;
+        
+        // Проверяем, можно ли начать игру
+        const count = readyUsers.length;
+        if (count < 4) {
+            alert(`Недостаточно готовых игроков! Готово: ${count}, нужно минимум 4.`);
+            return;
         }
-    } else {
-        console.log('Пользователь удален из готовых');
-    }
-    
-    // Проверяем, можно ли начать игру
-    const count = readyUsers.length;
-    if (count >= 4 && count <= 16) {
+        
+        if (count > 16) {
+            alert(`Слишком много готовых игроков! Готово: ${count}, максимум 16.`);
+            return;
+        }
+        
         // Устанавливаем количество игроков
         selectedPlayersCount = count;
         
-        // Используем режим ролей из первого готового игрока (все должны выбрать одинаковый)
-        if (readyUsers.length > 0 && readyUsers[0].roleMode) {
-            selectedRoleMode = readyUsers[0].roleMode;
-        }
-        
-        // Начинаем игру
+        // Начинаем игру с выбранным режимом ролей
         generateLobby();
         showLobbyScreen();
         
@@ -1467,6 +1560,37 @@ function attemptStartGame() {
         const messagesContainer = document.getElementById('ready-messages');
         if (messagesContainer) {
             messagesContainer.innerHTML = '';
+        }
+    } else {
+        // Для обычных пользователей - это регистрация готовности
+        const added = addUserToReady();
+        
+        if (!added) {
+            return;
+        }
+        
+        // Обновляем список готовых после добавления
+        const saved = localStorage.getItem('bunkerGameReady');
+        let ready = [];
+        if (saved) {
+            try {
+                ready = JSON.parse(saved);
+            } catch(e) {
+                ready = [];
+            }
+        }
+        readyUsers = ready;
+        
+        // Проверяем, был ли пользователь добавлен
+        const userInReady = ready.find(u => u.username === currentUser.username);
+        if (userInReady) {
+            console.log('Пользователь добавлен в готовые:', userInReady);
+            setTimeout(() => {
+                updateReadyDisplay();
+                checkIfCanStart();
+            }, 100);
+        } else {
+            console.log('Пользователь удален из готовых');
         }
     }
 }
