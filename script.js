@@ -501,13 +501,14 @@ async function handleRegister() {
 }
 
 async function handleLogout() {
-    // Удаляем пользователя из готовых
+    // Удаляем пользователя из готовых и онлайн
     if (currentUser) {
         // Удаляем с сервера
         try {
             await saveReadyPlayerToServer('remove', { username: currentUser.username });
+            await removeOnlineUserFromServer(currentUser.username);
         } catch (error) {
-            console.error('Ошибка удаления готовности с сервера при выходе:', error);
+            console.error('Ошибка удаления с сервера при выходе:', error);
         }
         
         // Удаляем из localStorage
@@ -729,9 +730,17 @@ async function clearReadyOnExit() {
         try {
             // Удаляем из готовых на сервере
             await saveReadyPlayerToServer('remove', { username: currentUser.username });
-            console.log('Готовность очищена при выходе:', currentUser.username);
+            // Удаляем из онлайн на сервере
+            await removeOnlineUserFromServer(currentUser.username);
+            console.log('Готовность и онлайн очищены при выходе:', currentUser.username);
         } catch (error) {
-            console.error('Ошибка очистки готовности при выходе:', error);
+            console.error('Ошибка очистки при выходе:', error);
+        }
+    } else {
+        // Для гостей тоже удаляем из онлайн
+        const visitorId = localStorage.getItem('visitorId');
+        if (visitorId) {
+            await removeOnlineUserFromServer(visitorId);
         }
     }
 }
@@ -754,7 +763,7 @@ function initOnlineSystem() {
         addUserToOnline(); // Обновляем для всех посетителей
         updateOnlineDisplay(); // Загружаем актуальные данные с сервера
         syncReadyUsers();
-    }, 1000); // Уменьшили интервал до 1 секунды для более быстрого обновления онлайн
+    }, 500); // Уменьшили интервал до 500мс для обновления в реальном времени
     
     // Обновляем онлайн при изменении видимости страницы
     let visibilityTimeout = null;
@@ -776,18 +785,36 @@ function initOnlineSystem() {
         }
     });
     
-    // Очистка готовности при закрытии/перезагрузке страницы
+    // Очистка готовности и онлайн при закрытии/перезагрузке страницы
     window.addEventListener('beforeunload', () => {
-        // Используем navigator.sendBeacon для надежной отправки запроса
+        // Используем navigator.sendBeacon для надежной отправки запросов
         if (currentUser && navigator.sendBeacon) {
-            const data = JSON.stringify({
+            // Удаляем из готовых
+            const readyData = JSON.stringify({
                 action: 'remove',
                 player: { username: currentUser.username }
             });
-            const blob = new Blob([data], { type: 'application/json' });
-            navigator.sendBeacon(getApiUrl('saveReadyPlayer'), blob);
-        } else if (currentUser) {
-            // Fallback для старых браузеров - синхронный запрос (может не сработать)
+            const readyBlob = new Blob([readyData], { type: 'application/json' });
+            navigator.sendBeacon(getApiUrl('saveReadyPlayer'), readyBlob);
+            
+            // Удаляем из онлайн
+            const onlineData = JSON.stringify({
+                action: 'remove',
+                username: currentUser.username
+            });
+            const onlineBlob = new Blob([onlineData], { type: 'application/json' });
+            navigator.sendBeacon(getApiUrl('saveOnlineUser'), onlineBlob);
+        } else {
+            // Fallback для старых браузеров или гостей
+            const visitorId = localStorage.getItem('visitorId');
+            if (visitorId && navigator.sendBeacon) {
+                const onlineData = JSON.stringify({
+                    action: 'remove',
+                    username: visitorId
+                });
+                const onlineBlob = new Blob([onlineData], { type: 'application/json' });
+                navigator.sendBeacon(getApiUrl('saveOnlineUser'), onlineBlob);
+            }
             clearReadyOnExit();
         }
     });
@@ -1331,6 +1358,33 @@ async function loadOnlineUsersFromServer() {
     } catch (error) {
         console.error('Ошибка при загрузке онлайн пользователей с сервера:', error);
         return [];
+    }
+}
+
+// Удаление пользователя из онлайн на сервере
+async function removeOnlineUserFromServer(username) {
+    try {
+        const response = await fetch(getApiUrl('saveOnlineUser'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'remove',
+                username: username
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            return true;
+        } else {
+            console.error('Ошибка удаления онлайн с сервера:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при удалении онлайн пользователя с сервера:', error);
+        return false;
     }
 }
 

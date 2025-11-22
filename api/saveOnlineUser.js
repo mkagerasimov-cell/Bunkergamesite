@@ -28,7 +28,36 @@ export default async function handler(req, res) {
         }
 
         // Получаем данные из тела запроса
-        const { username, isGuest } = req.body;
+        const { username, isGuest, action } = req.body;
+
+        // Если action = 'remove', удаляем пользователя из онлайн
+        if (action === 'remove') {
+            if (!username) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Не указано имя пользователя для удаления'
+                });
+            }
+
+            const deleteResponse = await fetch(`${supabaseUrl}/rest/v1/online_users?username=eq.${encodeURIComponent(username)}`, {
+                method: 'DELETE',
+                headers: {
+                    'apikey': supabaseServiceKey,
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!deleteResponse.ok && deleteResponse.status !== 404) {
+                const errorText = await deleteResponse.text();
+                throw new Error(`Supabase error: ${deleteResponse.status} ${errorText}`);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Онлайн пользователь удален'
+            });
+        }
 
         if (!username) {
             return res.status(400).json({
