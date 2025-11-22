@@ -15,7 +15,10 @@ let usersData = []; // Массив пользователей в памяти
 // === СИСТЕМА ОНЛАЙН И ГОТОВЫХ ИГРОКОВ ===
 let onlineUsers = []; // Массив онлайн пользователей
 let readyUsers = []; // Массив готовых игроков
-let onlineUpdateInterval = null; // Интервал обновления онлайн
+let onlineUpdateInterval = null; // Интервал обновления онлайн (будет удален после перехода на Realtime)
+let supabaseClient = null; // Supabase клиент для Realtime
+let onlineSubscription = null; // Подписка на изменения онлайн пользователей
+let readySubscription = null; // Подписка на изменения готовых игроков
 
 // === API ФУНКЦИИ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ ===
 
@@ -667,8 +670,96 @@ function updateAuthUI() {
     }
 }
 
+// Инициализация Supabase клиента для Realtime
+async function initSupabaseClient() {
+    try {
+        const response = await fetch(getApiUrl('getSupabaseConfig'));
+        const data = await response.json();
+        
+        if (data.success && data.url && data.anonKey) {
+            // Инициализируем Supabase клиент
+            supabaseClient = window.supabase.createClient(data.url, data.anonKey);
+            console.log('Supabase клиент инициализирован для Realtime');
+            return true;
+        } else {
+            console.error('Ошибка получения конфигурации Supabase:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка инициализации Supabase клиента:', error);
+        return false;
+    }
+}
+
+// Подписка на изменения онлайн пользователей через Realtime
+function subscribeToOnlineUsers() {
+    if (!supabaseClient) {
+        console.error('Supabase клиент не инициализирован');
+        return;
+    }
+    
+    // Отписываемся от предыдущей подписки, если есть
+    if (onlineSubscription) {
+        supabaseClient.removeChannel(onlineSubscription);
+    }
+    
+    // Подписываемся на изменения в таблице online_users
+    onlineSubscription = supabaseClient
+        .channel('online_users_changes')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // Все события (INSERT, UPDATE, DELETE)
+                schema: 'public',
+                table: 'online_users',
+                filter: 'timestamp=gt.' + new Date(Date.now() - 30000).toISOString() // Только активные за последние 30 сек
+            },
+            (payload) => {
+                console.log('Изменение в online_users:', payload);
+                // Обновляем список онлайн пользователей
+                updateOnlineDisplay();
+            }
+        )
+        .subscribe((status) => {
+            console.log('Статус подписки online_users:', status);
+        });
+}
+
+// Подписка на изменения готовых игроков через Realtime
+function subscribeToReadyPlayers() {
+    if (!supabaseClient) {
+        console.error('Supabase клиент не инициализирован');
+        return;
+    }
+    
+    // Отписываемся от предыдущей подписки, если есть
+    if (readySubscription) {
+        supabaseClient.removeChannel(readySubscription);
+    }
+    
+    // Подписываемся на изменения в таблице ready_players
+    readySubscription = supabaseClient
+        .channel('ready_players_changes')
+        .on(
+            'postgres_changes',
+            {
+                event: '*', // Все события (INSERT, UPDATE, DELETE)
+                schema: 'public',
+                table: 'ready_players'
+            },
+            (payload) => {
+                console.log('Изменение в ready_players:', payload);
+                // Синхронизируем готовых игроков
+                syncReadyUsers();
+            }
+        )
+        .subscribe((status) => {
+            console.log('Статус подписки ready_players:', status);
+        });
+}
+
 // Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     loadUsersData();
     
     // Обновляем UI после загрузки (дополнительный вызов для надежности)
@@ -676,8 +767,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAuthUI();
     }, 300);
     
+    // Инициализируем Supabase клиент для Realtime
+    const supabaseInitialized = await initSupabaseClient();
+    
     // Инициализация системы онлайн
-    initOnlineSystem();
+    initOnlineSystem(supabaseInitialized);
     
     // Слушаем обновления данных пользователей из других вкладок
     window.addEventListener('usersDataUpdated', () => {
@@ -756,7 +850,7 @@ async function clearReadyOnExit() {
 }
 
 // Инициализация системы онлайн
-function initOnlineSystem() {
+function initOnlineSystem(useRealtime = false) {
     // Добавляем посетителя в онлайн (работает для всех, даже неавторизованных)
     addUserToOnline();
     
@@ -764,16 +858,34 @@ function initOnlineSystem() {
     updateOnlineDisplay();
     syncReadyUsers();
     
-    // Устанавливаем периодическое обновление онлайн (каждые 5 секунд)
-    if (onlineUpdateInterval) {
-        clearInterval(onlineUpdateInterval);
+    if (useRealtime && supabaseClient) {
+        // Используем Realtime через WebSocket
+        console.log('Используется Realtime для синхронизации');
+        
+        // Подписываемся на изменения
+        subscribeToOnlineUsers();
+        subscribeToReadyPlayers();
+        
+        // Обновляем онлайн пользователя каждые 10 секунд (для поддержания активности)
+        if (onlineUpdateInterval) {
+            clearInterval(onlineUpdateInterval);
+        }
+        onlineUpdateInterval = setInterval(() => {
+            addUserToOnline(); // Обновляем timestamp для поддержания активности
+        }, 10000); // Обновляем каждые 10 секунд только для поддержания активности
+    } else {
+        // Fallback на polling, если Realtime недоступен
+        console.log('Используется polling для синхронизации (Realtime недоступен)');
+        if (onlineUpdateInterval) {
+            clearInterval(onlineUpdateInterval);
+        }
+        
+        onlineUpdateInterval = setInterval(() => {
+            addUserToOnline(); // Обновляем для всех посетителей
+            updateOnlineDisplay(); // Загружаем актуальные данные с сервера
+            syncReadyUsers();
+        }, 500); // Polling каждые 500мс
     }
-    
-    onlineUpdateInterval = setInterval(() => {
-        addUserToOnline(); // Обновляем для всех посетителей
-        updateOnlineDisplay(); // Загружаем актуальные данные с сервера
-        syncReadyUsers();
-    }, 500); // Уменьшили интервал до 500мс для обновления в реальном времени
     
     // Обновляем онлайн при изменении видимости страницы
     let visibilityTimeout = null;

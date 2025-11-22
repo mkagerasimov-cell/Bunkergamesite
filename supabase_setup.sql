@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS ready_players (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Включение Realtime для таблицы ready_players
+ALTER PUBLICATION supabase_realtime ADD TABLE ready_players;
+
 -- Создание индекса для быстрого поиска по username
 CREATE INDEX IF NOT EXISTS idx_ready_players_username ON ready_players(username);
 
@@ -113,6 +116,9 @@ CREATE TABLE IF NOT EXISTS online_users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(username) -- Уникальное ограничение на username для предотвращения дубликатов
 );
+
+-- Включение Realtime для таблицы online_users
+ALTER PUBLICATION supabase_realtime ADD TABLE online_users;
 
 -- Создание индекса для быстрого поиска по username
 CREATE INDEX IF NOT EXISTS idx_online_users_username ON online_users(username);
