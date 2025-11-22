@@ -126,7 +126,11 @@ async function saveUsersToServer() {
 // Сохранение одного пользователя на сервер
 async function saveSingleUserToServer(user, action = 'create') {
     try {
-        const response = await fetch(getApiUrl('saveUser'), {
+        const apiUrl = getApiUrl('saveUser');
+        console.log('Отправка запроса на:', apiUrl);
+        console.log('Данные:', { action, username: user.username });
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -137,17 +141,37 @@ async function saveSingleUserToServer(user, action = 'create') {
             })
         });
         
+        console.log('Статус ответа:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Ошибка HTTP:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
         const data = await response.json();
+        console.log('Ответ от сервера:', data);
         
         if (data.success) {
             console.log('Пользователь сохранен на сервер:', user.username);
             // Обновляем локальный массив
             if (action === 'create') {
-                usersData.push(user);
+                // Обновляем данные из ответа сервера, если они есть
+                if (data.user) {
+                    usersData.push({
+                        username: data.user.username,
+                        password: user.password, // Сохраняем пароль локально
+                        email: data.user.email,
+                        registeredAt: data.user.registeredAt,
+                        isAdmin: data.user.isAdmin
+                    });
+                } else {
+                    usersData.push(user);
+                }
             } else if (action === 'update') {
                 const index = usersData.findIndex(u => u.username === user.username);
                 if (index !== -1) {
-                    usersData[index] = user;
+                    usersData[index] = { ...usersData[index], ...user };
                 }
             }
             // Синхронизируем с localStorage
@@ -155,10 +179,15 @@ async function saveSingleUserToServer(user, action = 'create') {
             return true;
         } else {
             console.error('Ошибка сохранения пользователя на сервер:', data.error);
-            return false;
+            throw new Error(data.error || 'Неизвестная ошибка сервера');
         }
     } catch (error) {
         console.error('Ошибка при сохранении пользователя на сервер:', error);
+        console.error('Детали ошибки:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         return false;
     }
 }
@@ -281,14 +310,19 @@ function handleLogin() {
 }
 
 async function handleRegister() {
+    console.log('=== НАЧАЛО РЕГИСТРАЦИИ ===');
+    
     const username = document.getElementById('auth-register-username').value.trim();
     const password = document.getElementById('auth-register-password').value.trim();
     const email = document.getElementById('auth-register-email').value.trim();
     const messageEl = document.getElementById('auth-register-message');
     
+    console.log('Данные формы:', { username, password: '***', email });
+    
     if (!username || !password || !email) {
         messageEl.textContent = 'Заполните все поля!';
         messageEl.className = 'auth-message error';
+        console.log('Ошибка: не все поля заполнены');
         return;
     }
     
@@ -297,55 +331,75 @@ async function handleRegister() {
     if (!emailRegex.test(email)) {
         messageEl.textContent = 'Некорректный email!';
         messageEl.className = 'auth-message error';
+        console.log('Ошибка: некорректный email');
         return;
     }
     
-    // Проверка, существует ли пользователь (проверяем и на сервере, и локально)
-    await loadUsersFromServer(); // Обновляем список перед проверкой
-    if (usersData.find(u => u.username === username)) {
-        messageEl.textContent = 'Пользователь с таким логином уже существует!';
+    // Показываем индикатор загрузки
+    messageEl.textContent = 'Регистрация...';
+    messageEl.className = 'auth-message';
+    
+    try {
+        // Проверка, существует ли пользователь (проверяем и на сервере, и локально)
+        console.log('Загрузка пользователей с сервера...');
+        await loadUsersFromServer(); // Обновляем список перед проверкой
+        
+        if (usersData.find(u => u.username === username)) {
+            messageEl.textContent = 'Пользователь с таким логином уже существует!';
+            messageEl.className = 'auth-message error';
+            console.log('Ошибка: пользователь уже существует');
+            return;
+        }
+        
+        // Создаем нового пользователя
+        const newUser = {
+            username: username,
+            password: password,
+            email: email,
+            registeredAt: new Date().toISOString(),
+            isAdmin: username === 'drochYo' // Автоматически даем права админа пользователю drochYo
+        };
+        
+        console.log('Создание пользователя:', newUser.username);
+        
+        // Сохраняем на сервер
+        console.log('Отправка запроса на сервер...');
+        const saved = await saveSingleUserToServer(newUser, 'create');
+        
+        if (!saved) {
+            // Если не удалось сохранить на сервер, пробуем локально
+            console.warn('Сервер недоступен, сохраняем локально');
+            usersData.push(newUser);
+            localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+            messageEl.textContent = 'Регистрация успешна (локально)! Сервер недоступен.';
+            messageEl.className = 'auth-message success';
+        } else {
+            console.log('Пользователь успешно сохранен на сервер');
+            messageEl.textContent = 'Регистрация успешна! Теперь вы можете войти.';
+            messageEl.className = 'auth-message success';
+        }
+        
+        // Логируем для отладки
+        console.log('Новый пользователь зарегистрирован:', newUser.username);
+        console.log('Всего пользователей в системе:', usersData.length);
+        
+        // Очищаем поля
+        document.getElementById('auth-register-username').value = '';
+        document.getElementById('auth-register-password').value = '';
+        document.getElementById('auth-register-email').value = '';
+        
+        // Переключаемся на вкладку входа
+        setTimeout(() => {
+            switchAuthTab('login');
+            document.getElementById('auth-login-username').value = username;
+        }, 1500);
+        
+        console.log('=== РЕГИСТРАЦИЯ ЗАВЕРШЕНА ===');
+    } catch (error) {
+        console.error('Ошибка при регистрации:', error);
+        messageEl.textContent = 'Ошибка при регистрации: ' + error.message;
         messageEl.className = 'auth-message error';
-        return;
     }
-    
-    // Создаем нового пользователя
-    const newUser = {
-        username: username,
-        password: password,
-        email: email,
-        registeredAt: new Date().toISOString(),
-        isAdmin: username === 'drochYo' // Автоматически даем права админа пользователю drochYo
-    };
-    
-    // Сохраняем на сервер
-    const saved = await saveSingleUserToServer(newUser, 'create');
-    
-    if (!saved) {
-        // Если не удалось сохранить на сервер, пробуем локально
-        usersData.push(newUser);
-        localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
-        console.warn('Пользователь сохранен локально (сервер недоступен)');
-        messageEl.textContent = 'Регистрация успешна (локально)! Сервер недоступен.';
-        messageEl.className = 'auth-message success';
-    } else {
-        messageEl.textContent = 'Регистрация успешна! Теперь вы можете войти.';
-        messageEl.className = 'auth-message success';
-    }
-    
-    // Логируем для отладки
-    console.log('Новый пользователь зарегистрирован:', newUser.username);
-    console.log('Всего пользователей в системе:', usersData.length);
-    
-    // Очищаем поля
-    document.getElementById('auth-register-username').value = '';
-    document.getElementById('auth-register-password').value = '';
-    document.getElementById('auth-register-email').value = '';
-    
-    // Переключаемся на вкладку входа
-    setTimeout(() => {
-        switchAuthTab('login');
-        document.getElementById('auth-login-username').value = username;
-    }, 1500);
 }
 
 function handleLogout() {
