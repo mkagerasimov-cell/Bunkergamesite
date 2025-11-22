@@ -1663,7 +1663,18 @@ function goToRules() {
     document.querySelector('.bg-start')?.classList.add('active');
 }
 
+// Переменная для отслеживания, откуда пришли на страницу информации
+let infoReturnTo = 'main'; // 'main' или 'admin'
+
 function goToInfo() {
+    // Определяем, откуда пришли (если админка открыта, значит из админки)
+    const adminPage = document.getElementById('page-5');
+    if (adminPage && !adminPage.classList.contains('page-hidden')) {
+        infoReturnTo = 'admin';
+    } else {
+        infoReturnTo = 'main';
+    }
+    
     // Скрываем все страницы
     document.getElementById('page-1')?.classList.add('page-hidden');
     document.getElementById('page-2')?.classList.add('page-hidden');
@@ -1681,6 +1692,17 @@ function goToInfo() {
     
     // Генерируем контент информации
     generateInfoContent();
+}
+
+// Функция возврата со страницы информации
+function goBackFromInfo() {
+    if (infoReturnTo === 'admin') {
+        // Возвращаемся в админку
+        goToAdmin();
+    } else {
+        // Возвращаемся в главное меню
+        goToMain();
+    }
 }
 
 function goToAdmin() {
