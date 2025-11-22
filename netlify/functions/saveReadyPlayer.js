@@ -60,12 +60,25 @@ exports.handler = async (event, context) => {
 
         if (action === 'add') {
             // Добавляем готового игрока
+            if (!player || !player.username) {
+                return {
+                    statusCode: 400,
+                    headers,
+                    body: JSON.stringify({
+                        success: false,
+                        error: 'Не указано имя игрока'
+                    })
+                };
+            }
+            
             const playerData = {
                 username: player.username,
-                timestamp: player.timestamp || new Date().toISOString(),
+                timestamp: player.timestamp ? new Date(player.timestamp).toISOString() : new Date().toISOString(),
                 role_mode: player.roleMode || null,
                 is_admin: player.isAdmin || false
             };
+            
+            console.log('Добавление готового игрока:', playerData);
 
             // Сначала проверяем, есть ли уже такой игрок
             const checkResponse = await fetch(`${supabaseUrl}/rest/v1/ready_players?username=eq.${encodeURIComponent(player.username)}&select=username`, {
@@ -109,6 +122,7 @@ exports.handler = async (event, context) => {
             }
 
             // Создаем новую запись
+            console.log('Создание новой записи готового игрока:', playerData);
             const insertResponse = await fetch(`${supabaseUrl}/rest/v1/ready_players`, {
                 method: 'POST',
                 headers: {
@@ -122,15 +136,20 @@ exports.handler = async (event, context) => {
 
             if (!insertResponse.ok) {
                 const errorText = await insertResponse.text();
+                console.error('Ошибка при создании записи:', errorText);
                 throw new Error(`Supabase error: ${insertResponse.status} ${errorText}`);
             }
+
+            const insertedData = await insertResponse.json();
+            console.log('Готовый игрок успешно добавлен в Supabase:', insertedData);
 
             return {
                 statusCode: 200,
                 headers,
                 body: JSON.stringify({
                     success: true,
-                    message: 'Готовый игрок добавлен'
+                    message: 'Готовый игрок добавлен',
+                    data: insertedData
                 })
             };
 

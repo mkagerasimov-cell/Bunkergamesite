@@ -1279,23 +1279,34 @@ function updateOnlineDisplay() {
 // Сохранение готового игрока на сервер
 async function saveReadyPlayerToServer(action, player) {
     try {
-        const response = await fetch(getApiUrl('saveReadyPlayer'), {
+        const url = getApiUrl('saveReadyPlayer');
+        const payload = {
+            action: action,
+            player: player
+        };
+        
+        console.log('Отправка запроса на сервер:', url, payload);
+        
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                action: action,
-                player: player
-            })
+            body: JSON.stringify(payload)
         });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Ошибка HTTP при сохранении:', response.status, errorText);
+            return false;
+        }
         
         const data = await response.json();
         if (data.success) {
-            console.log('Готовый игрок сохранен на сервер:', action, player.username);
+            console.log('Готовый игрок сохранен на сервер:', action, player?.username || 'N/A', data);
             return true;
         } else {
-            console.error('Ошибка сохранения на сервер:', data.error);
+            console.error('Ошибка сохранения на сервер:', data.error, data);
             return false;
         }
     } catch (error) {
@@ -1372,13 +1383,21 @@ function addUserToReady() {
     readyUsers = ready;
     
     // Сохраняем на сервер
-    const userData = existingIndex !== -1 ? null : {
-        username: currentUser.username,
-        timestamp: Date.now()
-    };
-    saveReadyPlayerToServer(existingIndex !== -1 ? 'remove' : 'add', userData || { username: currentUser.username }).catch(err => {
-        console.error('Ошибка сохранения на сервер:', err);
-    });
+    if (existingIndex !== -1) {
+        // Удаляем с сервера
+        saveReadyPlayerToServer('remove', { username: currentUser.username }).catch(err => {
+            console.error('Ошибка удаления с сервера:', err);
+        });
+    } else {
+        // Добавляем на сервер
+        const userData = {
+            username: currentUser.username,
+            timestamp: Date.now()
+        };
+        saveReadyPlayerToServer('add', userData).catch(err => {
+            console.error('Ошибка сохранения на сервер:', err);
+        });
+    }
     
     updateReadyDisplay();
     checkIfCanStart();
@@ -1444,14 +1463,22 @@ function addAdminToReady() {
     console.log('Данные админа сохранены в localStorage:', ready);
     
     // Сохраняем на сервер
-    const userData = existingIndex !== -1 ? null : {
-        username: currentUser.username,
-        timestamp: Date.now(),
-        isAdmin: true
-    };
-    saveReadyPlayerToServer(existingIndex !== -1 ? 'remove' : 'add', userData || { username: currentUser.username, isAdmin: true }).catch(err => {
-        console.error('Ошибка сохранения на сервер:', err);
-    });
+    if (existingIndex !== -1) {
+        // Удаляем с сервера
+        saveReadyPlayerToServer('remove', { username: currentUser.username }).catch(err => {
+            console.error('Ошибка удаления админа с сервера:', err);
+        });
+    } else {
+        // Добавляем на сервер
+        const userData = {
+            username: currentUser.username,
+            timestamp: Date.now(),
+            isAdmin: true
+        };
+        saveReadyPlayerToServer('add', userData).catch(err => {
+            console.error('Ошибка сохранения админа на сервер:', err);
+        });
+    }
     
     updateReadyDisplay();
     checkIfCanStart();
