@@ -209,7 +209,12 @@ async function loadUsersData() {
             const sessionData = JSON.parse(session);
             const user = usersData.find(u => u.username === sessionData.username);
             if (user && user.password === sessionData.password) {
+                // Убеждаемся, что используем актуальные данные пользователя из usersData
                 currentUser = user;
+                console.log('Сессия восстановлена:', {
+                    username: currentUser.username,
+                    isAdmin: currentUser.isAdmin
+                });
             }
         } catch(e) {
             console.error('Ошибка восстановления сессии:', e);
@@ -301,7 +306,12 @@ function handleLogin() {
     const user = usersData.find(u => u.username === username && u.password === password);
     
     if (user) {
+        // Убеждаемся, что используем актуальные данные пользователя
         currentUser = user;
+        console.log('Вход выполнен:', {
+            username: currentUser.username,
+            isAdmin: currentUser.isAdmin
+        });
         // Сохраняем сессию
         localStorage.setItem('bunkerGameSession', JSON.stringify({
             username: user.username,
@@ -1227,13 +1237,16 @@ function updateOnlineDisplay() {
 function addUserToReady() {
     if (!currentUser) {
         alert('Сначала авторизуйтесь!');
-        return;
+        return false;
     }
     
     if (selectedRoleMode === "") {
         alert('Выберите режим ролей!');
-        document.getElementById('roles-menu').classList.add('show');
-        return;
+        const rolesMenu = document.getElementById('roles-menu');
+        if (rolesMenu) {
+            rolesMenu.classList.add('show');
+        }
+        return false;
     }
     
     // Загружаем текущий список готовых
@@ -1253,6 +1266,7 @@ function addUserToReady() {
         // Пользователь уже готов, убираем его
         ready.splice(existingIndex, 1);
         removeReadyMessage(currentUser.username);
+        console.log('Пользователь удален из готовых:', currentUser.username);
     } else {
         // Добавляем пользователя
         const userData = {
@@ -1262,12 +1276,15 @@ function addUserToReady() {
         };
         ready.push(userData);
         addReadyMessage(currentUser.username);
+        console.log('Пользователь добавлен в готовые:', userData);
     }
     
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
     readyUsers = ready;
     updateReadyDisplay();
     checkIfCanStart();
+    
+    return true;
 }
 
 // Обновление отображения готовых
@@ -1379,15 +1396,24 @@ function attemptStartGame() {
     if (selectedRoleMode === "") {
         const btn = document.getElementById('start-btn');
         btn.classList.add('shake-btn');
-        document.getElementById('roles-menu').classList.add('show');
+        const rolesMenu = document.getElementById('roles-menu');
+        if (rolesMenu) {
+            rolesMenu.classList.add('show');
+        }
         setTimeout(() => { btn.classList.remove('shake-btn'); }, 400);
+        alert('Сначала выберите режим ролей!');
         return;
     }
     
     // Добавляем/убираем пользователя из готовых
-    addUserToReady();
+    const added = addUserToReady();
     
-    // Обновляем список готовых после добавления
+    if (!added) {
+        // Если не удалось добавить (например, не выбран режим ролей), выходим
+        return;
+    }
+    
+    // Обновляем список готовых после добавления (addUserToReady уже обновляет, но на всякий случай)
     const saved = localStorage.getItem('bunkerGameReady');
     let ready = [];
     if (saved) {
@@ -1398,6 +1424,23 @@ function attemptStartGame() {
         }
     }
     readyUsers = ready;
+    
+    // Проверяем, был ли пользователь добавлен
+    const userInReady = ready.find(u => u.username === currentUser.username);
+    if (userInReady) {
+        console.log('Пользователь добавлен в готовые:', userInReady);
+        // Показываем сообщение пользователю
+        const messagesContainer = document.getElementById('ready-messages');
+        if (messagesContainer) {
+            // Сообщение уже добавлено в addUserToReady, но убедимся что оно видно
+            setTimeout(() => {
+                updateReadyDisplay();
+                checkIfCanStart();
+            }, 100);
+        }
+    } else {
+        console.log('Пользователь удален из готовых');
+    }
     
     // Проверяем, можно ли начать игру
     const count = readyUsers.length;
@@ -1663,8 +1706,17 @@ function forceStartGame() {
         return;
     }
     
-    const user = usersData.find(u => u.username === currentUser);
-    if (!user || !user.isAdmin) {
+    // currentUser - это объект, проверяем его свойство isAdmin
+    // Также проверяем в usersData на случай, если там более свежие данные
+    const userInData = usersData.find(u => u.username === currentUser.username);
+    const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+    
+    if (!isAdmin) {
+        console.log('Проверка админа:', {
+            currentUser: currentUser,
+            userInData: userInData,
+            isAdmin: isAdmin
+        });
         alert('Только администратор может досрочно начать игру!');
         return;
     }
