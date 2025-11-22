@@ -1384,7 +1384,12 @@ function addUserToReady() {
     checkIfCanStart();
     
     // Синхронизируем сразу после изменения для других пользователей
-    syncReadyUsers();
+    // Не ждем завершения, чтобы не блокировать UI
+    syncReadyUsers().then(() => {
+        console.log('Синхронизация после добавления пользователя завершена');
+        // Обновляем отображение после синхронизации
+        updateReadyDisplay();
+    });
     
     return true;
 }
@@ -1452,31 +1457,40 @@ function addAdminToReady() {
     checkIfCanStart();
     
     // Синхронизируем сразу после изменения для других пользователей
-    syncReadyUsers();
+    // Не ждем завершения, чтобы не блокировать UI
+    syncReadyUsers().then(() => {
+        console.log('Синхронизация после добавления админа завершена');
+    });
     
     return true;
 }
 
 // Обновление отображения готовых
 function updateReadyDisplay() {
-    const saved = localStorage.getItem('bunkerGameReady');
-    let ready = [];
-    if (saved) {
-        try {
-            ready = JSON.parse(saved);
-        } catch(e) {
-            console.error('Ошибка парсинга готовых игроков:', e);
+    // Используем глобальный массив readyUsers, который уже синхронизирован
+    // Если он пуст, пытаемся загрузить из localStorage как fallback
+    let ready = readyUsers;
+    if (!ready || ready.length === 0) {
+        const saved = localStorage.getItem('bunkerGameReady');
+        if (saved) {
+            try {
+                ready = JSON.parse(saved);
+                readyUsers = ready; // Обновляем глобальный массив
+            } catch(e) {
+                console.error('Ошибка парсинга готовых игроков:', e);
+                ready = [];
+            }
+        } else {
             ready = [];
         }
     }
     
-    // Обновляем глобальный массив
-    readyUsers = ready;
-    
     const readyCountEl = document.getElementById('ready-count-display');
     if (readyCountEl) {
-        readyCountEl.textContent = ready.length;
-        console.log('Обновлено отображение готовых:', ready.length, ready);
+        // ВСЕГДА используем readyUsers, так как он синхронизирован с сервером
+        const count = readyUsers && readyUsers.length >= 0 ? readyUsers.length : ready.length;
+        readyCountEl.textContent = count;
+        console.log('Обновлено отображение готовых:', count, 'readyUsers:', readyUsers.length, 'ready:', ready.length);
     }
 }
 
@@ -1599,6 +1613,11 @@ async function syncReadyUsers() {
         readyUsers = ready;
     }
     
+    // ВАЖНО: Обновляем отображение после синхронизации
+    // Сначала обновляем localStorage для совместимости
+    localStorage.setItem('bunkerGameReady', JSON.stringify(readyUsers));
+    
+    // Затем обновляем отображение
     updateReadyDisplay();
     checkIfCanStart();
     
@@ -1609,6 +1628,15 @@ async function syncReadyUsers() {
         readyUsers.forEach(user => {
             addReadyMessage(user.username);
         });
+    }
+    
+    console.log('Синхронизация завершена. Готовых игроков:', readyUsers.length);
+    
+    // Принудительно обновляем счетчик на странице
+    const readyCountEl = document.getElementById('ready-count-display');
+    if (readyCountEl) {
+        readyCountEl.textContent = readyUsers.length;
+        console.log('Счетчик обновлен принудительно:', readyUsers.length);
     }
 }
 
