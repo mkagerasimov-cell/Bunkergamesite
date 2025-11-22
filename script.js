@@ -259,13 +259,23 @@ function closeAuthModal() {
 }
 
 function switchAuthTab(tab) {
-    // Обновляем вкладки
-    document.getElementById('auth-tab-login').classList.toggle('active', tab === 'login');
-    document.getElementById('auth-tab-register').classList.toggle('active', tab === 'register');
+    const loginTab = document.getElementById('auth-tab-login');
+    const registerTab = document.getElementById('auth-tab-register');
+    const loginForm = document.getElementById('auth-form-login');
+    const registerForm = document.getElementById('auth-form-register');
     
-    // Обновляем формы
-    document.getElementById('auth-form-login').classList.toggle('active', tab === 'login');
-    document.getElementById('auth-form-register').classList.toggle('active', tab === 'register');
+    // Обновляем вкладки - явно убираем/добавляем active
+    if (tab === 'login') {
+        loginTab.classList.add('active');
+        registerTab.classList.remove('active');
+        loginForm.classList.add('active');
+        registerForm.classList.remove('active');
+    } else {
+        loginTab.classList.remove('active');
+        registerTab.classList.add('active');
+        loginForm.classList.remove('active');
+        registerForm.classList.add('active');
+    }
     
     // Обновляем заголовок
     document.getElementById('auth-modal-title').textContent = tab === 'login' ? 'АВТОРИЗАЦИЯ' : 'РЕГИСТРАЦИЯ';
@@ -527,8 +537,24 @@ function updateAuthUI() {
     } else {
         // В модальном окне
         userInfo.style.display = 'none';
-        loginForm.style.display = 'flex';
+        
+        // Явно устанавливаем форму входа как активную
         loginForm.classList.add('active');
+        loginForm.style.display = 'flex';
+        
+        // Явно скрываем форму регистрации
+        registerForm.classList.remove('active');
+        registerForm.style.display = 'none';
+        
+        // Устанавливаем активную вкладку "Вход"
+        const loginTab = document.getElementById('auth-tab-login');
+        const registerTab = document.getElementById('auth-tab-register');
+        if (loginTab) loginTab.classList.add('active');
+        if (registerTab) registerTab.classList.remove('active');
+        
+        // Обновляем заголовок
+        document.getElementById('auth-modal-title').textContent = 'АВТОРИЗАЦИЯ';
+        
         tabs.style.display = 'flex';
         
         // Показываем кнопку авторизации на главной странице
@@ -1627,6 +1653,36 @@ function showLobbyScreen() {
     document.getElementById('header-group-2').classList.add('headers-visible');
     document.querySelector('.bg-start').classList.remove('active');
     document.querySelector('.bg-lobby').classList.add('active');
+}
+
+// Функция для досрочного начала игры из админки
+function forceStartGame() {
+    // Проверяем, является ли пользователь админом
+    if (!currentUser) {
+        alert('Сначала авторизуйтесь!');
+        return;
+    }
+    
+    const user = usersData.find(u => u.username === currentUser);
+    if (!user || !user.isAdmin) {
+        alert('Только администратор может досрочно начать игру!');
+        return;
+    }
+    
+    // Устанавливаем минимальные значения для игры
+    if (selectedPlayersCount === 0) {
+        selectedPlayersCount = 4; // Минимальное количество игроков
+    }
+    
+    if (selectedRoleMode === "") {
+        selectedRoleMode = "Без них"; // Режим по умолчанию
+    }
+    
+    // Генерируем лобби и показываем экран
+    generateLobby();
+    showLobbyScreen();
+    
+    alert('Игра начата досрочно администратором!');
 }
 
 function goToMain() {

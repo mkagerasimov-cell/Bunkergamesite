@@ -2021,6 +2021,15 @@ html, body {
         font-size: 1rem !important;
     }
     
+    /* Явное скрытие неактивных форм в модалке авторизации */
+    .auth-form:not(.active) {
+        display: none !important;
+    }
+    
+    .auth-form.active {
+        display: flex !important;
+    }
+    
     /* Модалка голосования */
     .vote-modal-box {
         width: 95% !important;
