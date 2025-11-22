@@ -157,13 +157,6 @@
                 <div class="interactive-btn">
                     <div class="nav-text" id="online-display">Онлайн: <span id="online-count">0</span></div>
                 </div>
-                <div class="interactive-btn" style="margin-left: 20px;" onclick="toggleRolesMenu(event)">
-                    <div class="nav-text" id="roles-trigger-text">Активные роли</div>
-                    <div class="roles-popup" id="roles-menu" onclick="event.stopPropagation()">
-                        <div class="grid-title">РЕЖИМ</div>
-                        <div class="role-option" onclick="selectRole('Маньяк')">Маньяк</div><div class="role-option" onclick="selectRole('Убийца')">Убийца</div><div class="role-option" onclick="selectRole('Маньяк и Убийца')">Маньяк и Убийца</div><div class="role-option" onclick="selectRole('Без них')">Без них</div>
-                    </div>
-                </div>
             </div>
             <div class="header-title">BUNKER TOOL</div>
             <div class="nav-group-right">
@@ -370,6 +363,17 @@
         <div class="admin-container">
             <div class="admin-box liquid-glass blue-top-glow">
                 <h2 class="admin-title">👤 АДМИНИСТРИРОВАНИЕ ПОЛЬЗОВАТЕЛЕЙ</h2>
+                
+                <!-- Кнопка выбора ролей для админа -->
+                <div class="admin-roles-section" style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 15px; border: 1px solid rgba(255,255,255,0.1);">
+                    <div class="interactive-btn" style="display: inline-block;" onclick="toggleRolesMenu(event)">
+                        <div class="nav-text" id="roles-trigger-text">Активные роли</div>
+                        <div class="roles-popup" id="roles-menu" onclick="event.stopPropagation()">
+                            <div class="grid-title">РЕЖИМ</div>
+                            <div class="role-option" onclick="selectRole('Маньяк')">Маньяк</div><div class="role-option" onclick="selectRole('Убийца')">Убийца</div><div class="role-option" onclick="selectRole('Маньяк и Убийца')">Маньяк и Убийца</div><div class="role-option" onclick="selectRole('Без них')">Без них</div>
+                        </div>
+                    </div>
+                </div>
                 
                 <div class="admin-stats">
                     <div class="admin-stat-item">

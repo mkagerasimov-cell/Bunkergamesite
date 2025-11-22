@@ -511,7 +511,7 @@ function updateAuthUI() {
             }
         }
         
-        // Добавляем пользователя в онлайн при авторизации
+        // Обновляем онлайн при авторизации (теперь с именем пользователя)
         addUserToOnline();
         updateOnlineDisplay();
     } else {
@@ -597,10 +597,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Инициализация системы онлайн
 function initOnlineSystem() {
-    // Добавляем текущего пользователя в онлайн
-    if (currentUser) {
-        addUserToOnline();
-    }
+    // Добавляем посетителя в онлайн (работает для всех, даже неавторизованных)
+    addUserToOnline();
     
     // Обновляем отображение онлайн
     updateOnlineDisplay();
@@ -612,16 +610,14 @@ function initOnlineSystem() {
     }
     
     onlineUpdateInterval = setInterval(() => {
-        if (currentUser) {
-            addUserToOnline();
-        }
+        addUserToOnline(); // Обновляем для всех посетителей
         updateOnlineDisplay();
         syncReadyUsers();
     }, 5000);
     
     // Обновляем онлайн при изменении видимости страницы
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && currentUser) {
+        if (!document.hidden) {
             addUserToOnline();
             updateOnlineDisplay();
             syncReadyUsers();
@@ -1112,13 +1108,22 @@ function startBunkerUpdate(event) {
 
 // === ФУНКЦИИ ДЛЯ СИСТЕМЫ ОНЛАЙН И ГОТОВЫХ ИГРОКОВ ===
 
-// Добавление пользователя в онлайн
+// Добавление пользователя в онлайн (работает для всех, даже неавторизованных)
 function addUserToOnline() {
-    if (!currentUser) return;
+    // Генерируем уникальный ID для посетителя (если не авторизован)
+    let visitorId = localStorage.getItem('visitorId');
+    if (!visitorId) {
+        visitorId = 'visitor_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('visitorId', visitorId);
+    }
     
-    const userKey = `online_${currentUser.username}_${Date.now()}`;
+    // Используем имя пользователя, если авторизован, иначе visitor ID
+    const displayName = currentUser ? currentUser.username : visitorId;
+    
+    const userKey = `online_${displayName}_${Date.now()}`;
     const userData = {
-        username: currentUser.username,
+        username: displayName,
+        isGuest: !currentUser, // Флаг для гостей
         timestamp: Date.now(),
         key: userKey
     };
@@ -1137,8 +1142,11 @@ function addUserToOnline() {
         }
     }
     
-    // Проверяем, нет ли уже этого пользователя
-    const existingIndex = online.findIndex(u => u.username === currentUser.username);
+    // Проверяем, нет ли уже этого пользователя/посетителя
+    const existingIndex = online.findIndex(u => 
+        (currentUser && u.username === currentUser.username) || 
+        (!currentUser && u.username === visitorId)
+    );
     if (existingIndex !== -1) {
         online[existingIndex] = userData;
     } else {
