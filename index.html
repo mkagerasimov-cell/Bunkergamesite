@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help tool for: Bunker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="bg-layer bg-start active"></div>
+    <div class="bg-layer bg-lobby"></div>
+    <div class="overlay"></div>
+
+    <!-- МОДАЛКА ГОЛОСОВАНИЯ -->
+    <div class="vote-modal-overlay" id="vote-modal">
+        <div class="vote-modal-box liquid-glass blue-top-glow">
+            <div class="vote-title">КТО ГОЛОСУЕТ: <span id="voter-name-display" style="color:var(--highlight)"></span></div>
+            <div class="vote-subtitle">ВЫБЕРИТЕ ЦЕЛЬ:</div>
+            <div class="vote-targets-grid" id="vote-targets-container"></div>
+            <button class="close-modal-btn" onclick="closeVoteModal()">ОТМЕНА</button>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА АВТОРИЗАЦИИ/РЕГИСТРАЦИИ -->
+    <div class="auth-modal-overlay" id="auth-modal">
+        <div class="auth-modal-box liquid-glass blue-top-glow" onclick="event.stopPropagation()">
+            <div class="auth-modal-header">
+                <h2 class="auth-modal-title" id="auth-modal-title">АВТОРИЗАЦИЯ</h2>
+                <button class="auth-close-btn" onclick="closeAuthModal()">✕</button>
+            </div>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" id="auth-tab-login" onclick="switchAuthTab('login')">Вход</button>
+                <button class="auth-tab" id="auth-tab-register" onclick="switchAuthTab('register')">Регистрация</button>
+            </div>
+            
+            <div class="auth-content">
+                <!-- ФОРМА ВХОДА -->
+                <div class="auth-form active" id="auth-form-login">
+                    <div class="auth-input-group">
+                        <label class="auth-label">Логин:</label>
+                        <input type="text" id="auth-login-username" class="auth-input" placeholder="Введите логин" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+                    </div>
+                    <div class="auth-input-group">
+                        <label class="auth-label">Пароль:</label>
+                        <input type="password" id="auth-login-password" class="auth-input" placeholder="Введите пароль" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+                    </div>
+                    <button class="auth-submit-btn" onclick="handleLogin()">ВОЙТИ</button>
+                    <div class="auth-message" id="auth-login-message"></div>
+                </div>
+                
+                <!-- ФОРМА РЕГИСТРАЦИИ -->
+                <div class="auth-form" id="auth-form-register">
+                    <div class="auth-input-group">
+                        <label class="auth-label">Логин:</label>
+                        <input type="text" id="auth-register-username" class="auth-input" placeholder="Введите логин" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+                    </div>
+                    <div class="auth-input-group">
+                        <label class="auth-label">Пароль:</label>
+                        <input type="password" id="auth-register-password" class="auth-input" placeholder="Введите пароль" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+                    </div>
+                    <div class="auth-input-group">
+                        <label class="auth-label">Email:</label>
+                        <input type="email" id="auth-register-email" class="auth-input" placeholder="Введите email" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">
+                    </div>
+                    <button class="auth-submit-btn" onclick="handleRegister()">ЗАРЕГИСТРИРОВАТЬСЯ</button>
+                    <div class="auth-message" id="auth-register-message"></div>
+                </div>
+            </div>
+            
+            <div class="auth-user-info" id="auth-user-info" style="display: none;">
+                <div class="auth-user-text">Вы вошли как: <span id="auth-current-user"></span></div>
+                <button class="auth-logout-btn" onclick="handleLogout()">ВЫЙТИ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА РЕДАКТИРОВАНИЯ СПИСКОВ -->
+    <div class="edit-modal-overlay" id="edit-modal">
+        <div class="edit-modal-box liquid-glass blue-top-glow">
+            <div class="edit-modal-header">
+                <h2 class="edit-modal-title">РЕДАКТИРОВАНИЕ СПИСКОВ</h2>
+                <button class="edit-close-btn" onclick="closeEditModal()">✕</button>
+            </div>
+            
+            <div class="edit-tabs">
+                <button class="edit-tab active" onclick="switchEditTab('professions')">Профессии</button>
+                <button class="edit-tab" onclick="switchEditTab('health')">Здоровье</button>
+                <button class="edit-tab" onclick="switchEditTab('hobbies')">Хобби</button>
+                <button class="edit-tab" onclick="switchEditTab('phobias')">Фобии</button>
+                <button class="edit-tab" onclick="switchEditTab('facts')">Факты</button>
+                <button class="edit-tab" onclick="switchEditTab('actions')">Действия</button>
+            </div>
+            
+            <div class="edit-content">
+                <div class="edit-tab-content active" id="tab-professions">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-professions" class="edit-input" placeholder="Введите новую профессию..." onkeypress="if(event.key==='Enter') addItem('professions')">
+                        <button class="edit-add-btn" onclick="addItem('professions')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-professions"></div>
+                </div>
+                
+                <div class="edit-tab-content" id="tab-health">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-health" class="edit-input" placeholder="Введите новое состояние здоровья..." onkeypress="if(event.key==='Enter') addItem('health')">
+                        <button class="edit-add-btn" onclick="addItem('health')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-health"></div>
+                </div>
+                
+                <div class="edit-tab-content" id="tab-hobbies">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-hobbies" class="edit-input" placeholder="Введите новое хобби..." onkeypress="if(event.key==='Enter') addItem('hobbies')">
+                        <button class="edit-add-btn" onclick="addItem('hobbies')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-hobbies"></div>
+                </div>
+                
+                <div class="edit-tab-content" id="tab-phobias">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-phobias" class="edit-input" placeholder="Введите новую фобию..." onkeypress="if(event.key==='Enter') addItem('phobias')">
+                        <button class="edit-add-btn" onclick="addItem('phobias')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-phobias"></div>
+                </div>
+                
+                <div class="edit-tab-content" id="tab-facts">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-facts" class="edit-input" placeholder="Введите новый факт..." onkeypress="if(event.key==='Enter') addItem('facts')">
+                        <button class="edit-add-btn" onclick="addItem('facts')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-facts"></div>
+                </div>
+                
+                <div class="edit-tab-content" id="tab-actions">
+                    <div class="edit-add-section">
+                        <input type="text" id="add-actions" class="edit-input" placeholder="Введите новую карту действия..." onkeypress="if(event.key==='Enter') addItem('actions')">
+                        <button class="edit-add-btn" onclick="addItem('actions')">ДОБАВИТЬ</button>
+                    </div>
+                    <div class="edit-list" id="list-actions"></div>
+                </div>
+            </div>
+            
+            <div class="edit-modal-footer">
+                <button class="edit-save-btn" onclick="saveEditChanges()">СОХРАНИТЬ</button>
+                <button class="edit-reset-btn" onclick="resetEditChanges()">СБРОСИТЬ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ШАПКА 1 (ГЛАВНАЯ) -->
+    <div class="headers-group headers-visible header-triple-container" id="header-group-1">
+        <header class="glass-panel liquid-glass header-main">
+            <div class="nav-group-left">
+                <div class="interactive-btn">
+                    <div class="nav-text" id="online-display">Онлайн: <span id="online-count">0</span></div>
+                </div>
+                <div class="interactive-btn" style="margin-left: 20px;" onclick="toggleRolesMenu(event)">
+                    <div class="nav-text" id="roles-trigger-text">Активные роли</div>
+                    <div class="roles-popup" id="roles-menu" onclick="event.stopPropagation()">
+                        <div class="grid-title">РЕЖИМ</div>
+                        <div class="role-option" onclick="selectRole('Маньяк')">Маньяк</div><div class="role-option" onclick="selectRole('Убийца')">Убийца</div><div class="role-option" onclick="selectRole('Маньяк и Убийца')">Маньяк и Убийца</div><div class="role-option" onclick="selectRole('Без них')">Без них</div>
+                    </div>
+                </div>
+            </div>
+            <div class="header-title">BUNKER TOOL</div>
+            <div class="nav-group-right">
+                <div class="nav-text" onclick="openEditModal()" title="Редактировать списки">✏️ Редактировать</div><div class="nav-text" onclick="goToRules()">Правила</div><div class="nav-text" onclick="goToInfo()">Информация</div><div class="nav-text" id="admin-nav-btn" onclick="goToAdmin()" title="Администрирование" style="display: none;">👤 Админка</div><div style="font-size:1.4rem; cursor:pointer;">⚙</div>
+            </div>
+        </header>
+    </div>
+
+    <!-- ШАПКА 2 (ЛОББИ) -->
+    <div class="headers-group headers-hidden" id="header-group-2">
+        <header class="liquid-glass unified-header blue-top-glow">
+            <div class="unified-left">
+                <div class="back-btn" onclick="goToMain()"><span>❮</span> МЕНЮ</div>
+                <div class="end-game-btn" onclick="endGame()">ЗАКОНЧИТЬ ИГРУ</div>
+            </div>
+            <div class="unified-center">BUNKER GAME</div>
+            <div class="unified-right"><div style="font-size:1.5rem; cursor:pointer;">⚙</div></div>
+        </header>
+    </div>
+
+    <!-- СТРАНИЦА 1 -->
+    <div class="page" id="page-1">
+        <h1 class="hero-title">Bunker Tool</h1>
+        <div class="ready-info" id="ready-info">
+            <div class="ready-count">Готово: <span id="ready-count-display">0</span> / <span id="ready-count-min">4</span>-<span id="ready-count-max">16</span></div>
+        </div>
+        <button class="glitch-btn" id="start-btn" onclick="attemptStartGame()">START GAME</button>
+        <button class="auth-btn" id="auth-btn" onclick="openAuthModal()">🔐 Авторизация/Регистрация</button>
+        
+        <!-- Сообщения о готовности -->
+        <div class="ready-messages" id="ready-messages"></div>
+        
+        <!-- Информация о пользователе в правом нижнем углу -->
+        <div class="auth-user-display-page" id="auth-user-display-page" style="display: none;">
+            <span class="auth-user-text-page">Авторизировался: <span id="auth-username-display-page"></span></span>
+            <button class="auth-logout-btn-page" onclick="handleLogout()">Выйти</button>
+        </div>
+    </div>
+
+    <!-- СТРАНИЦА 2 -->
+    <div class="page page-hidden" id="page-2">
+        <div class="page-content-spacer"></div>
+        <div class="lobby-container">
+            
+            <!-- ЛЕВЫЙ БЛОК -->
+            <div class="panel liquid-glass blue-top-glow">
+                <h3 style="margin:0; opacity:0.9; letter-spacing:2px; text-align:center; width:100%;">СЕКРЕТНАЯ ИНФОРМАЦИЯ</h3>
+                <div style="height:1px; width:100%; background:rgba(255,255,255,0.15); margin:15px 0;"></div>
+                
+                <!-- ДОБАВИЛ ID СЮДА -->
+                <div class="side-label" id="label-roles">Секретные роли:</div>
+                <div id="secret-roles-display" class="secret-text"></div>
+				<div id="secret-roles-display" class="secret-text spoiler" onclick="this.classList.remove('spoiler')"></div>
+
+                <div class="data-row" style="margin-top: 20px;"></div>
+                <div class="side-label" id="label-threats">Скрытые Угрозы Бункера:</div>
+                <div id="secret-threats-display" class="secret-text" style="font-weight: 400; font-size: 0.9rem;"></div>
+
+                <div class="data-row" style="margin-top: 20px;"></div>
+                <div class="side-label" id="label-location">Внешняя Местность:</div>
+                <div id="external-location-display" class="secret-text" style="font-weight: 400; font-size: 0.9rem;"></div>
+				<div id="secret-threats-display" class="secret-text spoiler" style="font-weight: 400; font-size: 0.9rem;" onclick="this.classList.remove('spoiler')"></div>
+            </div>
+            
+            <!-- ЦЕНТР -->
+            <div class="center-column">
+                <!-- 3D Flip Container -->
+                <div class="flip-container">
+                    <div class="bunker-card-3d" id="bunker-card-3d">
+                        
+                        <!-- ЛИЦЕВАЯ СТОРОНА -->
+                        <div class="card-face card-front liquid-glass blue-top-glow">
+                            <div class="refresh-bunker-btn" onclick="startBunkerUpdate(event)">↻</div>
+
+                            <div class="bunker-title">КАРТОЧКА БУНКЕРА</div>
+                            <div class="divider-line"></div>
+                            
+                            <div class="info-label">
+                                Катастрофа: <span id="catastrophe-name"></span>
+                            </div>
+
+                            <div class="desc-label">Описание катастрофы:</div>
+                            <div class="desc-text" id="catastrophe-desc"></div>
+
+                            <div class="time-label">
+                                Срок жизни в бункере: <span id="catastrophe-time"></span>
+                            </div>
+
+                            <div class="divider-line"></div>
+                            <div class="condition-header" id="bunker-capacity-text">УСЛОВИЯ БУНКЕРА</div>
+                            <div class="bunker-stat">
+                                <div class="stat-label">Площадь бункера:</div>
+                                <span id="bunker-area"></span>
+                            </div>
+                            <div class="bunker-stat">
+                                <div class="stat-label">Запас воды:</div>
+                                <span id="bunker-water"></span>
+                            </div>
+                            <div class="bunker-stat">
+                                <div class="stat-label">Генератор:</div>
+                                <span id="bunker-generator"></span>
+                            </div>
+
+                            <div class="divider-line" style="margin-top:30px;"></div>
+                            <div class="condition-header">ОСНАЩЕНИЕ БУНКЕРА</div>
+                            
+                            <div class="bunker-stat">
+                                <div class="stat-label">Медпункт:</div>
+                                <span id="bunker-med"></span>
+                            </div>
+                            <div class="bunker-stat">
+                                <div class="stat-label">Комната Механика:</div>
+                                <span id="bunker-mech"></span>
+                            </div>
+                            <div class="bunker-stat">
+                                <div class="stat-label">Комната Выращивания:</div>
+                                <span id="bunker-grow"></span>
+                            </div>
+                            <div class="bunker-stat" style="align-items:flex-start;">
+                                <div class="stat-label" style="min-width:150px;">Спец. Снабжение:</div>
+                                <span id="bunker-special" style="font-weight:400; line-height:1.4;"></span>
+                            </div>
+                        </div>
+
+                        <!-- ОБРАТНАЯ СТОРОНА -->
+                        <div class="card-face card-back">
+                            <div class="scan-line"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- СЕТКА ИГРОКОВ -->
+                <div class="cards-grid" id="cards-container"></div>
+            </div>
+
+            <!-- ПРАВЫЙ БЛОК -->
+            <div class="panel liquid-glass blue-top-glow">
+                <h3 style="margin:0; opacity:0.9; letter-spacing:2px; text-align:center; width:100%;">КАРТОЧКА ГОЛОСОВАНИЯ</h3>
+                <div style="height:1px; width:100%; background:rgba(255,255,255,0.15); margin:15px 0;"></div>
+                <div class="voting-list" id="voting-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- СТРАНИЦА 3 (ПРАВИЛА) -->
+    <div class="page page-hidden" id="page-3">
+        <div class="page-content-spacer"></div>
+        <div class="rules-container">
+            <div class="rules-box liquid-glass blue-top-glow">
+                <h2 class="rules-title">ПРАВИЛА ИГРЫ "БУНКЕР"</h2>
+                <div class="rules-content">
+                    <p><strong>«Бункер»</strong> — это дискуссионная настольная игра, в которой игрокам нужно убедить других, что именно их нужно взять в убежище после глобальной катастрофы. В начале игры каждый получает случайные карточки с характеристиками (пол, возраст, профессия, здоровье, хобби и т.д.). Каждый раунд игроки раскрывают по одной карте, рассказывая о себе, чтобы затем провести голосование по выбыванию, в результате чего количество людей в бункере сокращается до нужного числа.</p>
+                    
+                    <h3 class="rules-section-title">Подготовка к игре</h3>
+                    <ul class="rules-list">
+                        <li>Соберите компанию от 4 до 16 человек, так как игра рассчитана на это количество игроков.</li>
+                        <li>Раздайте каждому игроку несколько карт характеристик (пол, возраст, профессия, здоровье, хобби, факт, фобия, карта действия и карта убеждения).</li>
+                        <li>В зависимости от количества игроков, определите количество мест в бункере. Например, при 6-8 игроках в бункер попадут 2-3 человека.</li>
+                    </ul>
+
+                    <h3 class="rules-section-title">Ход игры</h3>
+                    <ul class="rules-list">
+                        <li><strong>Объявление катастрофы:</strong> Ведущий объявляет тип катастрофы, после чего начинается игра.</li>
+                        <li><strong>Представление:</strong> Каждый игрок по очереди раскрывает по одной своей карте и рассказывает о себе, объясняя, почему он достоин попасть в бункер. На представление каждого игрока отводится около 1 минуты.</li>
+                        <li><strong>Обсуждение:</strong> После всех представлений начинается коллективное обсуждение (около 1 минуты).</li>
+                        <li><strong>Голосование:</strong> Проводится голосование. Игроки голосуют за того, кого, по их мнению, нужно выгнать из бункера. Игроки, набравшие больше голосов, выбывают.</li>
+                        <li><strong>Смена раунда:</strong> Игра продолжается со следующим игроком по кругу до тех пор, пока не останется нужное количество людей для бункера.</li>
+                        <li><strong>Победа:</strong> Выжившие игроки (попавшие в бункер) раскрывают свои последние оставшиеся карты и выигрывают, если они способны противостоять катастрофе.</li>
+                    </ul>
+
+                    <h3 class="rules-section-title">Важно</h3>
+                    <ul class="rules-list">
+                        <li>При голосовании игрокам запрещается разглашать нераскрытые характеристики персонажа, чтобы попытаться кого-то переубедить.</li>
+                        <li>Нераскрытые персонажи остаются снаружи и противостоят угрозам самостоятельно.</li>
+                        <li>Цель игры — собрать команду для возрождения человечества, поэтому игроки должны выбрать самых полезных и подходящих кандидатов для этого.</li>
+                    </ul>
+                </div>
+                <button class="back-btn rules-back-btn" onclick="goToMain()">
+                    <span>❮</span> ВЕРНУТЬСЯ В МЕНЮ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- СТРАНИЦА 4 (ИНФОРМАЦИЯ) -->
+    <div class="page page-hidden" id="page-4">
+        <div class="page-content-spacer"></div>
+        <div class="info-container">
+            <div class="info-box liquid-glass blue-top-glow">
+                <h2 class="info-title">ИНФОРМАЦИЯ ОБ ИГРЕ</h2>
+                <div class="info-content" id="info-content">
+                    <!-- Контент будет сгенерирован через JavaScript -->
+                </div>
+                <button class="back-btn info-back-btn" onclick="goToMain()">
+                    <span>❮</span> ВЕРНУТЬСЯ В МЕНЮ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- СТРАНИЦА 5 (АДМИНИСТРИРОВАНИЕ) -->
+    <div class="page page-hidden" id="page-5">
+        <div class="page-content-spacer"></div>
+        <div class="admin-container">
+            <div class="admin-box liquid-glass blue-top-glow">
+                <h2 class="admin-title">👤 АДМИНИСТРИРОВАНИЕ ПОЛЬЗОВАТЕЛЕЙ</h2>
+                
+                <div class="admin-stats">
+                    <div class="admin-stat-item">
+                        <span class="admin-stat-label">Всего пользователей:</span>
+                        <span class="admin-stat-value" id="admin-total-users">0</span>
+                    </div>
+                </div>
+                
+                <div class="admin-actions">
+                    <button class="admin-action-btn" onclick="exportUsersJSON()">📥 Экспорт JSON</button>
+                    <button class="admin-action-btn" onclick="exportUsersCSV()">📥 Экспорт CSV</button>
+                    <button class="admin-action-btn" onclick="refreshAdminData()">🔄 Обновить</button>
+                    <button class="admin-action-btn admin-action-btn-danger" onclick="clearAllUsers()">🗑️ Очистить всех</button>
+                </div>
+                
+                <div class="admin-users-list" id="admin-users-list">
+                    <!-- Список пользователей будет сгенерирован через JavaScript -->
+                </div>
+                
+                <button class="back-btn admin-back-btn" onclick="goToMain()">
+                    <span>❮</span> ВЕРНУТЬСЯ В МЕНЮ
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
