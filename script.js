@@ -17,62 +17,161 @@ let onlineUsers = []; // Массив онлайн пользователей
 let readyUsers = []; // Массив готовых игроков
 let onlineUpdateInterval = null; // Интервал обновления онлайн
 
-// Загрузка пользователей из файла или localStorage
-function loadUsersData() {
-    // Сначала пытаемся загрузить из localStorage
-    const saved = localStorage.getItem('bunkerGameUsers');
-    if (saved) {
-        try {
-            usersData = JSON.parse(saved);
-            console.log('Пользователи загружены из localStorage:', usersData.length);
+// === API ФУНКЦИИ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ ===
+
+// Получение URL для Netlify Functions
+function getApiUrl(functionName) {
+    // В продакшене используем реальный URL, в разработке - локальный
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return `/.netlify/functions/${functionName}`;
+    }
+    return `/.netlify/functions/${functionName}`;
+}
+
+// Загрузка пользователей с сервера
+async function loadUsersFromServer() {
+    try {
+        const response = await fetch(getApiUrl('getUsers'));
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.users)) {
+            usersData = data.users;
+            console.log('Пользователи загружены с сервера:', usersData.length);
             
             // Убеждаемся, что пользователь drochYo имеет права админа
+            let hasChanges = false;
             usersData.forEach(user => {
                 if (user.username === 'drochYo' && !user.isAdmin) {
                     user.isAdmin = true;
+                    hasChanges = true;
                     console.log('Права администратора выданы пользователю drochYo');
                 }
             });
             
-            // Сохраняем обновленные данные, если были изменения
-            const hasChanges = usersData.some(user => user.username === 'drochYo' && user.isAdmin);
+            // Сохраняем обновленные данные на сервер, если были изменения
             if (hasChanges) {
-                saveUsersData();
+                await saveUsersToServer();
             }
+            
+            // Синхронизируем с localStorage для офлайн-режима
+            localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+            
+            return true;
+        } else {
+            console.error('Ошибка загрузки пользователей:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при загрузке пользователей с сервера:', error);
+        // Пытаемся загрузить из localStorage как fallback
+        return loadUsersFromLocalStorage();
+    }
+}
+
+// Загрузка пользователей из localStorage (fallback)
+function loadUsersFromLocalStorage() {
+    const saved = localStorage.getItem('bunkerGameUsers');
+    if (saved) {
+        try {
+            usersData = JSON.parse(saved);
+            console.log('Пользователи загружены из localStorage (fallback):', usersData.length);
+            return true;
         } catch(e) {
             console.error('Ошибка загрузки пользователей из localStorage:', e);
             usersData = [];
+            return false;
         }
     }
-    
-    // Также пытаемся загрузить из файла users.json (если есть)
-    fetch('users.json')
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            }
-            throw new Error('Файл не найден');
-        })
-        .then(data => {
-            if (Array.isArray(data) && data.length > 0) {
-                usersData = data;
-                
-                // Убеждаемся, что пользователь drochYo имеет права админа
-                usersData.forEach(user => {
-                    if (user.username === 'drochYo' && !user.isAdmin) {
-                        user.isAdmin = true;
-                        console.log('Права администратора выданы пользователю drochYo');
-                    }
-                });
-                
-                // Синхронизируем с localStorage
-                localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
-                console.log('Пользователи загружены из users.json:', usersData.length);
-            }
-        })
-        .catch(err => {
-            console.log('Файл users.json не найден, используем localStorage');
+    usersData = [];
+    return false;
+}
+
+// Сохранение пользователей на сервер
+async function saveUsersToServer() {
+    try {
+        const response = await fetch(getApiUrl('saveUser'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'saveAll',
+                user: usersData
+            })
         });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Пользователи сохранены на сервер:', data.count);
+            // Обновляем данные с сервера для синхронизации
+            usersData = data.users || usersData;
+            // Синхронизируем с localStorage
+            localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+            return true;
+        } else {
+            console.error('Ошибка сохранения пользователей на сервер:', data.error);
+            // Сохраняем в localStorage как fallback
+            localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении пользователей на сервер:', error);
+        // Сохраняем в localStorage как fallback
+        localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+        return false;
+    }
+}
+
+// Сохранение одного пользователя на сервер
+async function saveSingleUserToServer(user, action = 'create') {
+    try {
+        const response = await fetch(getApiUrl('saveUser'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: action,
+                user: user
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('Пользователь сохранен на сервер:', user.username);
+            // Обновляем локальный массив
+            if (action === 'create') {
+                usersData.push(user);
+            } else if (action === 'update') {
+                const index = usersData.findIndex(u => u.username === user.username);
+                if (index !== -1) {
+                    usersData[index] = user;
+                }
+            }
+            // Синхронизируем с localStorage
+            localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+            return true;
+        } else {
+            console.error('Ошибка сохранения пользователя на сервер:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении пользователя на сервер:', error);
+        return false;
+    }
+}
+
+// Загрузка пользователей из файла или localStorage
+async function loadUsersData() {
+    // Сначала пытаемся загрузить с сервера
+    const serverLoaded = await loadUsersFromServer();
+    
+    // Если не удалось загрузить с сервера, используем localStorage
+    if (!serverLoaded) {
+        loadUsersFromLocalStorage();
+    }
     
     // Проверяем, есть ли сохраненная сессия
     const session = localStorage.getItem('bunkerGameSession');
@@ -94,12 +193,19 @@ function loadUsersData() {
     }, 100);
 }
 
-// Сохранение пользователей в localStorage
-function saveUsersData() {
-    // Сохраняем в localStorage
+// Сохранение пользователей (на сервер и в localStorage)
+async function saveUsersData() {
+    // Сохраняем на сервер
+    await saveUsersToServer();
+    
+    // Также сохраняем в localStorage для офлайн-режима
     localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
     
-    console.log('Пользователи сохранены в localStorage:', usersData.length);
+    console.log('Пользователи сохранены:', usersData.length);
+    console.log('Список пользователей:', usersData.map(u => u.username).join(', '));
+    
+    // Отправляем событие для обновления других вкладок (если они открыты)
+    window.dispatchEvent(new CustomEvent('usersDataUpdated'));
 }
 
 // Функции модального окна авторизации
@@ -174,7 +280,7 @@ function handleLogin() {
     }
 }
 
-function handleRegister() {
+async function handleRegister() {
     const username = document.getElementById('auth-register-username').value.trim();
     const password = document.getElementById('auth-register-password').value.trim();
     const email = document.getElementById('auth-register-email').value.trim();
@@ -194,7 +300,8 @@ function handleRegister() {
         return;
     }
     
-    // Проверка, существует ли пользователь
+    // Проверка, существует ли пользователь (проверяем и на сервере, и локально)
+    await loadUsersFromServer(); // Обновляем список перед проверкой
     if (usersData.find(u => u.username === username)) {
         messageEl.textContent = 'Пользователь с таким логином уже существует!';
         messageEl.className = 'auth-message error';
@@ -210,11 +317,24 @@ function handleRegister() {
         isAdmin: username === 'drochYo' // Автоматически даем права админа пользователю drochYo
     };
     
-    usersData.push(newUser);
-    saveUsersData();
+    // Сохраняем на сервер
+    const saved = await saveSingleUserToServer(newUser, 'create');
     
-    messageEl.textContent = 'Регистрация успешна! Теперь вы можете войти.';
-    messageEl.className = 'auth-message success';
+    if (!saved) {
+        // Если не удалось сохранить на сервер, пробуем локально
+        usersData.push(newUser);
+        localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+        console.warn('Пользователь сохранен локально (сервер недоступен)');
+        messageEl.textContent = 'Регистрация успешна (локально)! Сервер недоступен.';
+        messageEl.className = 'auth-message success';
+    } else {
+        messageEl.textContent = 'Регистрация успешна! Теперь вы можете войти.';
+        messageEl.className = 'auth-message success';
+    }
+    
+    // Логируем для отладки
+    console.log('Новый пользователь зарегистрирован:', newUser.username);
+    console.log('Всего пользователей в системе:', usersData.length);
     
     // Очищаем поля
     document.getElementById('auth-register-username').value = '';
@@ -332,6 +452,28 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Инициализация системы онлайн
     initOnlineSystem();
+    
+    // Слушаем обновления данных пользователей из других вкладок
+    window.addEventListener('usersDataUpdated', async () => {
+        console.log('Получено событие обновления пользователей из другой вкладки');
+        await loadUsersData();
+        // Если админка открыта, обновляем её
+        if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
+            await refreshAdminData();
+        }
+    });
+    
+    // Слушаем изменения в localStorage (для синхронизации между вкладками)
+    window.addEventListener('storage', async (e) => {
+        if (e.key === 'bunkerGameUsers') {
+            console.log('Обнаружено изменение localStorage для пользователей');
+            await loadUsersData();
+            // Если админка открыта, обновляем её
+            if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
+                await refreshAdminData();
+            }
+        }
+    });
     
     // Закрытие модалки только через кнопку закрытия или кнопку выхода
     // (убрано закрытие по клику вне модалки)
@@ -1440,8 +1582,24 @@ function goToAdmin() {
     document.querySelector('.bg-lobby')?.classList.remove('active');
     document.querySelector('.bg-start')?.classList.add('active');
     
+    // Загружаем актуальные данные перед генерацией контента
+    await loadUsersData();
+    
     // Генерируем контент админки
-    refreshAdminData();
+    setTimeout(async () => {
+        await refreshAdminData();
+    }, 100);
+    
+    // Устанавливаем автоматическое обновление каждые 3 секунды
+    if (window.adminRefreshInterval) {
+        clearInterval(window.adminRefreshInterval);
+    }
+    window.adminRefreshInterval = setInterval(() => {
+        if (!document.getElementById('page-5')?.classList.contains('page-hidden')) {
+            loadUsersData();
+            refreshAdminData();
+        }
+    }, 3000);
 }
 
 function generateInfoContent() {
@@ -1777,20 +1935,35 @@ document.addEventListener('click', function(e) {
 
 // === ФУНКЦИИ АДМИНИСТРИРОВАНИЯ ===
 
-function refreshAdminData() {
-    // Загружаем актуальные данные
-    const saved = localStorage.getItem('bunkerGameUsers');
-    if (saved) {
-        try {
-            usersData = JSON.parse(saved);
-        } catch(e) {
-            console.error('Ошибка загрузки пользователей:', e);
+async function refreshAdminData() {
+    // Загружаем актуальные данные с сервера
+    const serverLoaded = await loadUsersFromServer();
+    
+    if (!serverLoaded) {
+        // Если не удалось загрузить с сервера, используем localStorage
+        const saved = localStorage.getItem('bunkerGameUsers');
+        if (saved) {
+            try {
+                const loadedUsers = JSON.parse(saved);
+                usersData = loadedUsers;
+                console.log('Админка: загружено пользователей из localStorage (fallback):', usersData.length);
+            } catch(e) {
+                console.error('Ошибка загрузки пользователей:', e);
+                usersData = [];
+            }
+        } else {
             usersData = [];
+            console.log('Админка: данных нет');
         }
+    } else {
+        console.log('Админка: загружено пользователей с сервера:', usersData.length);
     }
     
     // Обновляем статистику
-    document.getElementById('admin-total-users').textContent = usersData.length;
+    const totalUsersEl = document.getElementById('admin-total-users');
+    if (totalUsersEl) {
+        totalUsersEl.textContent = usersData.length;
+    }
     
     // Генерируем список пользователей
     const listContainer = document.getElementById('admin-users-list');
@@ -1848,7 +2021,7 @@ function refreshAdminData() {
     }).join('');
 }
 
-function toggleAdmin(index) {
+async function toggleAdmin(index) {
     const user = usersData[index];
     if (!user) return;
     
@@ -1868,13 +2041,15 @@ function toggleAdmin(index) {
             updateAuthUI();
         }
         
-        saveUsersData();
-        refreshAdminData();
+        // Сохраняем на сервер
+        await saveSingleUserToServer(user, 'update');
+        await saveUsersData(); // Синхронизируем весь массив
+        await refreshAdminData();
         alert(`Права администратора ${user.isAdmin ? 'выданы' : 'отозваны'}!`);
     }
 }
 
-function deleteUser(index) {
+async function deleteUser(index) {
     const user = usersData[index];
     if (!user) return;
     
@@ -1885,10 +2060,34 @@ function deleteUser(index) {
     }
     
     if (confirm(`Удалить пользователя "${user.username}"?`)) {
-        usersData.splice(index, 1);
-        saveUsersData();
-        refreshAdminData();
-        alert('Пользователь удален!');
+        try {
+            // Удаляем на сервере
+            const response = await fetch(getApiUrl('saveUser'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'delete',
+                    user: user
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Удаляем из локального массива
+                usersData.splice(index, 1);
+                localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+                await refreshAdminData();
+                alert('Пользователь удален!');
+            } else {
+                alert('Ошибка при удалении пользователя: ' + data.error);
+            }
+        } catch (error) {
+            console.error('Ошибка при удалении пользователя:', error);
+            alert('Ошибка при удалении пользователя. Попробуйте еще раз.');
+        }
     }
 }
 
@@ -1936,17 +2135,47 @@ function exportUsersCSV() {
     alert('Данные экспортированы в CSV файл!');
 }
 
-function clearAllUsers() {
+async function clearAllUsers() {
     if (confirm('ВНИМАНИЕ! Вы уверены, что хотите удалить ВСЕХ пользователей? Это действие нельзя отменить!')) {
         if (confirm('Последнее предупреждение! Все данные будут удалены!')) {
-            usersData = [];
-            localStorage.removeItem('bunkerGameUsers');
-            localStorage.removeItem('bunkerGameSession');
-            currentUser = null;
-            saveUsersData();
-            refreshAdminData();
-            updateAuthUI();
-            alert('Все пользователи удалены!');
+            try {
+                // Удаляем всех пользователей через API
+                // Получаем список всех пользователей
+                await loadUsersFromServer();
+                
+                // Удаляем каждого пользователя (кроме drochYo)
+                for (const user of usersData) {
+                    if (user.username !== 'drochYo') {
+                        try {
+                            await fetch(getApiUrl('saveUser'), {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    action: 'delete',
+                                    user: user
+                                })
+                            });
+                        } catch (error) {
+                            console.error(`Ошибка при удалении пользователя ${user.username}:`, error);
+                        }
+                    }
+                }
+                
+                // Очищаем локальные данные
+                usersData = usersData.filter(u => u.username === 'drochYo'); // Оставляем только drochYo
+                localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
+                localStorage.removeItem('bunkerGameSession');
+                currentUser = null;
+                
+                await refreshAdminData();
+                updateAuthUI();
+                alert('Все пользователи удалены (кроме drochYo)!');
+            } catch (error) {
+                console.error('Ошибка при удалении пользователей:', error);
+                alert('Ошибка при удалении пользователей. Попробуйте еще раз.');
+            }
         }
     }
 }
