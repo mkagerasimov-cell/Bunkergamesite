@@ -606,7 +606,9 @@ function updateAuthUI() {
                 adminReadyBtn.style.display = 'none';
             }
             if (startBtn) {
-                startBtn.textContent = 'START GAME';
+                // Проверяем, готов ли пользователь, и обновляем текст кнопки
+                const isReady = readyUsers.some(u => u.username === currentUser.username);
+                startBtn.textContent = isReady ? 'Not ready' : 'Ready';
             }
         }
         
@@ -657,10 +659,10 @@ function updateAuthUI() {
             adminReadyBtn.style.display = 'none';
         }
         
-        // Возвращаем текст кнопки START GAME к исходному
+        // Возвращаем текст кнопки к исходному
         const startBtn = document.getElementById('start-btn');
         if (startBtn) {
-            startBtn.textContent = 'START GAME';
+            startBtn.textContent = 'Ready';
         }
         
         // Скрываем кнопку "Активные роли" для неавторизованных
@@ -1943,10 +1945,11 @@ function addUserToReady() {
     
     // Проверяем, нет ли уже этого пользователя
     const existingIndex = ready.findIndex(u => u.username === currentUser.username);
-    if (existingIndex !== -1) {
+    const wasReady = existingIndex !== -1;
+    
+    if (wasReady) {
         // Пользователь уже готов, убираем его
         ready.splice(existingIndex, 1);
-        removeReadyMessage(currentUser.username);
         console.log('Пользователь удален из готовых:', currentUser.username);
     } else {
         // Добавляем пользователя (без roleMode для обычных пользователей)
@@ -1955,15 +1958,20 @@ function addUserToReady() {
             timestamp: Date.now()
         };
         ready.push(userData);
-        addReadyMessage(currentUser.username);
         console.log('Пользователь добавлен в готовые:', userData);
     }
     
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
     readyUsers = ready;
     
+    // Обновляем текст кнопки сразу (локально)
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn && !isAdmin) {
+        startBtn.textContent = wasReady ? 'Ready' : 'Not ready';
+    }
+    
     // Сохраняем на сервер
-    if (existingIndex !== -1) {
+    if (wasReady) {
         // Удаляем с сервера
         saveReadyPlayerToServer('remove', { username: currentUser.username }).catch(err => {
             console.error('Ошибка удаления с сервера:', err);
@@ -1979,15 +1987,22 @@ function addUserToReady() {
         });
     }
     
-    updateReadyDisplay();
-    checkIfCanStart();
+    // НЕ обновляем UI сразу - только после синхронизации с сервером
+    // updateReadyDisplay(); // Убрано - будет обновлено после синхронизации
+    // checkIfCanStart(); // Убрано - будет обновлено после синхронизации
     
-    // Синхронизируем сразу после изменения для других пользователей
-    // Не ждем завершения, чтобы не блокировать UI
+    // Синхронизируем с сервером и ТОЛЬКО ПОТОМ обновляем UI
     syncReadyUsers().then(() => {
-        console.log('Синхронизация после добавления пользователя завершена');
+        console.log('Синхронизация после изменения готовности завершена');
         // Обновляем отображение после синхронизации
         updateReadyDisplay();
+        checkIfCanStart();
+        
+        // Обновляем текст кнопки на основе актуальных данных с сервера
+        if (startBtn && !isAdmin) {
+            const isReadyNow = readyUsers.some(u => u.username === currentUser.username);
+            startBtn.textContent = isReadyNow ? 'Not ready' : 'Ready';
+        }
     });
     
     return true;
@@ -2098,6 +2113,17 @@ function updateReadyDisplay() {
         const count = readyUsers && readyUsers.length >= 0 ? readyUsers.length : ready.length;
         readyCountEl.textContent = count;
         console.log('Обновлено отображение готовых:', count, 'readyUsers:', readyUsers.length, 'ready:', ready.length);
+    }
+    
+    // Обновляем текст кнопки на основе актуального состояния готовности
+    const startBtn = document.getElementById('start-btn');
+    if (startBtn && currentUser) {
+        const userInData = usersData.find(u => u.username === currentUser.username);
+        const isAdmin = currentUser.isAdmin || (userInData && userInData.isAdmin);
+        if (!isAdmin) {
+            const isReady = readyUsers.some(u => u.username === currentUser.username);
+            startBtn.textContent = isReady ? 'Not ready' : 'Ready';
+        }
     }
 }
 
