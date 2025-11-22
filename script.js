@@ -536,8 +536,9 @@ async function handleLogout() {
     updateAuthUI();
     closeAuthModal();
     
-    // Обновляем онлайн
-    updateOnlineDisplay();
+    // Обновляем онлайн (удаляем из локального массива сразу)
+    onlineUsers = onlineUsers.filter(u => u.username !== (currentUser?.username || ''));
+    updateOnlineDisplayFromLocal();
 }
 
 function updateAuthUI() {
@@ -704,6 +705,7 @@ function subscribeToOnlineUsers() {
     }
     
     // Подписываемся на изменения в таблице online_users
+    // УБИРАЕМ фильтр, чтобы получать ВСЕ события, включая DELETE
     onlineSubscription = supabaseClient
         .channel('online_users_changes')
         .on(
@@ -711,17 +713,34 @@ function subscribeToOnlineUsers() {
             {
                 event: '*', // Все события (INSERT, UPDATE, DELETE)
                 schema: 'public',
-                table: 'online_users',
-                filter: 'timestamp=gt.' + new Date(Date.now() - 30000).toISOString() // Только активные за последние 30 сек
+                table: 'online_users'
             },
             (payload) => {
-                console.log('Изменение в online_users:', payload);
-                // Обновляем список онлайн пользователей
-                updateOnlineDisplay();
+                console.log('Realtime событие в online_users:', payload);
+                
+                // Обрабатываем события сразу, без задержки
+                if (payload.eventType === 'DELETE') {
+                    // Пользователь удален - сразу обновляем
+                    const deletedUsername = payload.old_record?.username;
+                    if (deletedUsername) {
+                        // Удаляем из локального массива
+                        onlineUsers = onlineUsers.filter(u => u.username !== deletedUsername);
+                        // Обновляем отображение
+                        updateOnlineDisplayFromLocal();
+                    }
+                } else if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                    // Пользователь добавлен/обновлен - загружаем актуальные данные
+                    updateOnlineDisplay();
+                }
             }
         )
         .subscribe((status) => {
             console.log('Статус подписки online_users:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Подписка на online_users активна');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ Ошибка подписки на online_users');
+            }
         });
 }
 
@@ -748,13 +767,31 @@ function subscribeToReadyPlayers() {
                 table: 'ready_players'
             },
             (payload) => {
-                console.log('Изменение в ready_players:', payload);
-                // Синхронизируем готовых игроков
-                syncReadyUsers();
+                console.log('Realtime событие в ready_players:', payload);
+                
+                // Обрабатываем события сразу
+                if (payload.eventType === 'DELETE') {
+                    // Игрок удален из готовых
+                    const deletedUsername = payload.old_record?.username;
+                    if (deletedUsername) {
+                        readyUsers = readyUsers.filter(u => u.username !== deletedUsername);
+                        updateReadyDisplay();
+                        checkIfCanStart();
+                        removeReadyMessage(deletedUsername);
+                    }
+                } else {
+                    // INSERT или UPDATE - загружаем актуальные данные
+                    syncReadyUsers();
+                }
             }
         )
         .subscribe((status) => {
             console.log('Статус подписки ready_players:', status);
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ Подписка на ready_players активна');
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ Ошибка подписки на ready_players');
+            }
         });
 }
 
@@ -831,12 +868,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Очистка готовности при выходе пользователя
 async function clearReadyOnExit() {
     if (currentUser) {
+        const usernameToRemove = currentUser.username;
+        
+        // СНАЧАЛА удаляем из локальных массивов (мгновенно)
+        readyUsers = readyUsers.filter(u => u.username !== usernameToRemove);
+        onlineUsers = onlineUsers.filter(u => u.username !== usernameToRemove);
+        updateReadyDisplay();
+        updateOnlineDisplayFromLocal();
+        removeReadyMessage(usernameToRemove);
+        
+        // ПОТОМ удаляем с сервера (асинхронно)
         try {
-            // Удаляем из готовых на сервере
-            await saveReadyPlayerToServer('remove', { username: currentUser.username });
-            // Удаляем из онлайн на сервере
-            await removeOnlineUserFromServer(currentUser.username);
-            console.log('Готовность и онлайн очищены при выходе:', currentUser.username);
+            await saveReadyPlayerToServer('remove', { username: usernameToRemove });
+            await removeOnlineUserFromServer(usernameToRemove);
+            console.log('Готовность и онлайн очищены при выходе:', usernameToRemove);
         } catch (error) {
             console.error('Ошибка очистки при выходе:', error);
         }
@@ -844,7 +889,16 @@ async function clearReadyOnExit() {
         // Для гостей тоже удаляем из онлайн
         const visitorId = localStorage.getItem('visitorId');
         if (visitorId) {
-            await removeOnlineUserFromServer(visitorId);
+            // СНАЧАЛА удаляем из локального массива
+            onlineUsers = onlineUsers.filter(u => u.username !== visitorId);
+            updateOnlineDisplayFromLocal();
+            
+            // ПОТОМ удаляем с сервера
+            try {
+                await removeOnlineUserFromServer(visitorId);
+            } catch (error) {
+                console.error('Ошибка удаления гостя из онлайн:', error);
+            }
         }
     }
 }
@@ -1559,6 +1613,24 @@ async function addUserToOnline() {
     
     localStorage.setItem('bunkerGameOnline', JSON.stringify(online));
     updateOnlineDisplay();
+}
+
+// Обновление отображения онлайн из локального массива (быстро, без запроса к серверу)
+function updateOnlineDisplayFromLocal() {
+    const now = Date.now();
+    // Фильтруем только активных (за последние 30 секунд)
+    const activeUsers = onlineUsers.filter(u => {
+        const timestampMs = typeof u.timestamp === 'number' ? u.timestamp : new Date(u.timestamp).getTime();
+        return (now - timestampMs) < 30000;
+    });
+    
+    // Фильтруем только авторизованных пользователей (не гостей) для счетчика
+    const authorizedUsers = activeUsers.filter(u => !u.isGuest);
+    
+    const onlineCountEl = document.getElementById('online-count');
+    if (onlineCountEl) {
+        onlineCountEl.textContent = authorizedUsers.length;
+    }
 }
 
 // Обновление отображения онлайн
