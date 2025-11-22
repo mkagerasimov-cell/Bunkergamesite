@@ -31,14 +31,20 @@ exports.handler = async (event, context) => {
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
+        console.log('=== GET USERS FUNCTION ===');
+        console.log('Supabase URL:', supabaseUrl ? 'Установлен' : 'НЕ УСТАНОВЛЕН');
+        console.log('Anon Key:', supabaseKey ? 'Установлен' : 'НЕ УСТАНОВЛЕН');
+        console.log('Все переменные окружения:', Object.keys(process.env).filter(k => k.includes('SUPABASE')));
+
         if (!supabaseUrl || !supabaseKey) {
             console.error('Supabase credentials not configured');
+            console.error('Доступные переменные:', Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('supabase')));
             return {
                 statusCode: 500,
                 headers,
                 body: JSON.stringify({
                     success: false,
-                    error: 'Supabase не настроен. Проверьте переменные окружения.',
+                    error: 'Supabase не настроен. Проверьте переменные окружения. Убедитесь, что переменные названы: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY (заглавными буквами) и что сайт передеплоен после добавления переменных.',
                     users: []
                 })
             };

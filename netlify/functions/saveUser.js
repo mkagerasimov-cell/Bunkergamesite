@@ -31,14 +31,20 @@ exports.handler = async (event, context) => {
         const supabaseUrl = process.env.SUPABASE_URL;
         const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // Используем service key для записи
 
+        console.log('=== SAVE USER FUNCTION ===');
+        console.log('Supabase URL:', supabaseUrl ? 'Установлен (' + supabaseUrl.substring(0, 20) + '...)' : 'НЕ УСТАНОВЛЕН');
+        console.log('Service Key:', supabaseServiceKey ? 'Установлен (' + supabaseServiceKey.substring(0, 20) + '...)' : 'НЕ УСТАНОВЛЕН');
+        console.log('Все переменные окружения:', Object.keys(process.env).filter(k => k.includes('SUPABASE')));
+
         if (!supabaseUrl || !supabaseServiceKey) {
             console.error('Supabase credentials not configured');
+            console.error('Доступные переменные:', Object.keys(process.env).filter(k => k.includes('SUPABASE') || k.includes('supabase')));
             return {
                 statusCode: 500,
                 headers,
                 body: JSON.stringify({
                     success: false,
-                    error: 'Supabase не настроен. Проверьте переменные окружения.'
+                    error: 'Supabase не настроен. Проверьте переменные окружения. Убедитесь, что переменные названы: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY (заглавными буквами) и что сайт передеплоен после добавления переменных.'
                 })
             };
         }
@@ -59,8 +65,13 @@ exports.handler = async (event, context) => {
         }
 
         if (action === 'create') {
+            console.log('Создание пользователя:', user.username);
+            
             // Проверяем, не существует ли уже такой пользователь
-            const checkResponse = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(user.username)}&select=username`, {
+            const checkUrl = `${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(user.username)}&select=username`;
+            console.log('Проверка существования:', checkUrl);
+            
+            const checkResponse = await fetch(checkUrl, {
                 method: 'GET',
                 headers: {
                     'apikey': supabaseServiceKey,
@@ -69,8 +80,11 @@ exports.handler = async (event, context) => {
                 }
             });
 
+            console.log('Статус проверки:', checkResponse.status);
+
             if (checkResponse.ok) {
                 const existing = await checkResponse.json();
+                console.log('Существующие пользователи:', existing);
                 if (existing && existing.length > 0) {
                     return {
                         statusCode: 409,
@@ -92,7 +106,17 @@ exports.handler = async (event, context) => {
                 is_admin: user.isAdmin || false
             };
 
-            const response = await fetch(`${supabaseUrl}/rest/v1/users`, {
+            console.log('Данные для создания:', { 
+                username: newUser.username, 
+                email: newUser.email,
+                hasPassword: !!newUser.password,
+                is_admin: newUser.is_admin 
+            });
+
+            const insertUrl = `${supabaseUrl}/rest/v1/users`;
+            console.log('URL для создания:', insertUrl);
+
+            const response = await fetch(insertUrl, {
                 method: 'POST',
                 headers: {
                     'apikey': supabaseServiceKey,
@@ -103,13 +127,20 @@ exports.handler = async (event, context) => {
                 body: JSON.stringify(newUser)
             });
 
+            console.log('Статус создания:', response.status, response.statusText);
+
             if (!response.ok) {
                 const errorText = await response.text();
+                console.error('Ошибка Supabase:', errorText);
+                console.error('Статус:', response.status);
                 throw new Error(`Supabase error: ${response.status} ${errorText}`);
             }
 
             const createdUser = await response.json();
+            console.log('Созданный пользователь:', createdUser);
             const result = Array.isArray(createdUser) ? createdUser[0] : createdUser;
+
+            console.log('Пользователь успешно создан в Supabase!');
 
             return {
                 statusCode: 200,

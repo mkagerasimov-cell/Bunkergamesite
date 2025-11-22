@@ -19,23 +19,30 @@ CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
 -- Включение Row Level Security (RLS)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- Политика: разрешить всем читать пользователей (для публичного API)
+-- Удаляем старые политики, если они есть
+DROP POLICY IF EXISTS "Allow public read access" ON users;
+DROP POLICY IF EXISTS "Allow public insert" ON users;
+DROP POLICY IF EXISTS "Allow public update" ON users;
+DROP POLICY IF EXISTS "Allow public delete" ON users;
+
+-- Политика: разрешить всем читать пользователей (для публичного API через anon key)
 CREATE POLICY "Allow public read access" ON users
   FOR SELECT
   USING (true);
 
--- Политика: разрешить всем создавать пользователей (для регистрации)
+-- Политика: разрешить всем создавать пользователей (для регистрации через anon key)
 CREATE POLICY "Allow public insert" ON users
   FOR INSERT
   WITH CHECK (true);
 
--- Политика: разрешить всем обновлять пользователей (через service_role key)
--- Service role key обходит RLS, поэтому эта политика не критична
+-- Политика: разрешить всем обновлять пользователей
+-- Service role key обходит RLS автоматически, но политика нужна для anon key
 CREATE POLICY "Allow public update" ON users
   FOR UPDATE
   USING (true);
 
--- Политика: разрешить всем удалять пользователей (через service_role key)
+-- Политика: разрешить всем удалять пользователей
+-- Service role key обходит RLS автоматически, но политика нужна для anon key
 CREATE POLICY "Allow public delete" ON users
   FOR DELETE
   USING (true);
