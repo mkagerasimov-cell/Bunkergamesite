@@ -55,3 +55,52 @@ COMMENT ON COLUMN users.email IS 'Email пользователя';
 COMMENT ON COLUMN users.is_admin IS 'Флаг администратора';
 COMMENT ON COLUMN users.registered_at IS 'Дата регистрации';
 
+-- Создание таблицы готовых игроков
+CREATE TABLE IF NOT EXISTS ready_players (
+  id BIGSERIAL PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  role_mode TEXT,
+  is_admin BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Создание индекса для быстрого поиска по username
+CREATE INDEX IF NOT EXISTS idx_ready_players_username ON ready_players(username);
+
+-- Включение Row Level Security (RLS)
+ALTER TABLE ready_players ENABLE ROW LEVEL SECURITY;
+
+-- Удаляем старые политики, если они есть
+DROP POLICY IF EXISTS "Allow public read access" ON ready_players;
+DROP POLICY IF EXISTS "Allow public insert" ON ready_players;
+DROP POLICY IF EXISTS "Allow public update" ON ready_players;
+DROP POLICY IF EXISTS "Allow public delete" ON ready_players;
+
+-- Политика: разрешить всем читать готовых игроков
+CREATE POLICY "Allow public read access" ON ready_players
+  FOR SELECT
+  USING (true);
+
+-- Политика: разрешить всем добавлять готовых игроков
+CREATE POLICY "Allow public insert" ON ready_players
+  FOR INSERT
+  WITH CHECK (true);
+
+-- Политика: разрешить всем обновлять готовых игроков
+CREATE POLICY "Allow public update" ON ready_players
+  FOR UPDATE
+  USING (true);
+
+-- Политика: разрешить всем удалять готовых игроков
+CREATE POLICY "Allow public delete" ON ready_players
+  FOR DELETE
+  USING (true);
+
+-- Комментарии к таблице
+COMMENT ON TABLE ready_players IS 'Таблица готовых игроков для игры Bunker';
+COMMENT ON COLUMN ready_players.username IS 'Имя пользователя';
+COMMENT ON COLUMN ready_players.timestamp IS 'Время регистрации готовности';
+COMMENT ON COLUMN ready_players.role_mode IS 'Режим ролей (для админа)';
+COMMENT ON COLUMN ready_players.is_admin IS 'Флаг администратора';
+

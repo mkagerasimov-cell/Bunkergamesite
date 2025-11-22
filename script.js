@@ -1274,6 +1274,55 @@ function updateOnlineDisplay() {
     onlineUsers = online;
 }
 
+// === API ФУНКЦИИ ДЛЯ РАБОТЫ С ГОТОВЫМИ ИГРОКАМИ ===
+
+// Сохранение готового игрока на сервер
+async function saveReadyPlayerToServer(action, player) {
+    try {
+        const response = await fetch(getApiUrl('saveReadyPlayer'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: action,
+                player: player
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            console.log('Готовый игрок сохранен на сервер:', action, player.username);
+            return true;
+        } else {
+            console.error('Ошибка сохранения на сервер:', data.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении готового игрока на сервер:', error);
+        return false;
+    }
+}
+
+// Загрузка готовых игроков с сервера
+async function loadReadyPlayersFromServer() {
+    try {
+        const response = await fetch(getApiUrl('getReadyPlayers'));
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.ready)) {
+            console.log('Готовые игроки загружены с сервера:', data.ready.length);
+            return data.ready;
+        } else {
+            console.error('Ошибка загрузки готовых игроков:', data.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('Ошибка при загрузке готовых игроков с сервера:', error);
+        return [];
+    }
+}
+
 // Добавление пользователя в готовые (для обычных пользователей, без проверки ролей)
 function addUserToReady() {
     if (!currentUser) {
@@ -1321,6 +1370,16 @@ function addUserToReady() {
     
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
     readyUsers = ready;
+    
+    // Сохраняем на сервер
+    const userData = existingIndex !== -1 ? null : {
+        username: currentUser.username,
+        timestamp: Date.now()
+    };
+    saveReadyPlayerToServer(existingIndex !== -1 ? 'remove' : 'add', userData || { username: currentUser.username }).catch(err => {
+        console.error('Ошибка сохранения на сервер:', err);
+    });
+    
     updateReadyDisplay();
     checkIfCanStart();
     
@@ -1378,6 +1437,16 @@ function addAdminToReady() {
     localStorage.setItem('bunkerGameReady', JSON.stringify(ready));
     readyUsers = ready;
     console.log('Данные админа сохранены в localStorage:', ready);
+    
+    // Сохраняем на сервер
+    const userData = existingIndex !== -1 ? null : {
+        username: currentUser.username,
+        timestamp: Date.now(),
+        isAdmin: true
+    };
+    saveReadyPlayerToServer(existingIndex !== -1 ? 'remove' : 'add', userData || { username: currentUser.username, isAdmin: true }).catch(err => {
+        console.error('Ошибка сохранения на сервер:', err);
+    });
     
     updateReadyDisplay();
     checkIfCanStart();
@@ -1493,18 +1562,42 @@ function removeReadyMessage(username) {
 }
 
 // Синхронизация готовых игроков (для всех пользователей)
-function syncReadyUsers() {
-    // Сначала загружаем актуальные данные из localStorage
-    const saved = localStorage.getItem('bunkerGameReady');
-    let ready = [];
-    if (saved) {
-        try {
-            ready = JSON.parse(saved);
-        } catch(e) {
-            ready = [];
+async function syncReadyUsers() {
+    // Сначала пытаемся загрузить с сервера
+    try {
+        const serverReady = await loadReadyPlayersFromServer();
+        if (serverReady && serverReady.length > 0) {
+            readyUsers = serverReady;
+            // Синхронизируем с localStorage
+            localStorage.setItem('bunkerGameReady', JSON.stringify(serverReady));
+            console.log('Синхронизировано с сервера:', serverReady.length, 'готовых игроков');
+        } else {
+            // Если сервер пуст, загружаем из localStorage
+            const saved = localStorage.getItem('bunkerGameReady');
+            let ready = [];
+            if (saved) {
+                try {
+                    ready = JSON.parse(saved);
+                } catch(e) {
+                    ready = [];
+                }
+            }
+            readyUsers = ready;
         }
+    } catch (error) {
+        console.error('Ошибка синхронизации с сервером, используем localStorage:', error);
+        // Fallback на localStorage
+        const saved = localStorage.getItem('bunkerGameReady');
+        let ready = [];
+        if (saved) {
+            try {
+                ready = JSON.parse(saved);
+            } catch(e) {
+                ready = [];
+            }
+        }
+        readyUsers = ready;
     }
-    readyUsers = ready; // Обновляем глобальный массив
     
     updateReadyDisplay();
     checkIfCanStart();
@@ -1584,6 +1677,12 @@ function attemptStartGame() {
         // Очищаем список готовых
         localStorage.removeItem('bunkerGameReady');
         readyUsers = [];
+        
+        // Очищаем на сервере
+        saveReadyPlayerToServer('clear', {}).catch(err => {
+            console.error('Ошибка очистки на сервере:', err);
+        });
+        
         updateReadyDisplay();
         checkIfCanStart();
         
@@ -1884,6 +1983,14 @@ function forceStartGame() {
     if (selectedRoleMode === "") {
         selectedRoleMode = "Без них"; // Режим по умолчанию
     }
+    
+    // Очищаем готовых игроков на сервере и локально
+    localStorage.removeItem('bunkerGameReady');
+    readyUsers = [];
+    saveReadyPlayerToServer('clear', {}).catch(err => {
+        console.error('Ошибка очистки на сервере:', err);
+    });
+    updateReadyDisplay();
     
     // Скрываем админку перед переходом на страницу игры
     document.getElementById('page-5')?.classList.add('page-hidden');
