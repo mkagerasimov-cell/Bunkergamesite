@@ -94,25 +94,12 @@ function loadUsersData() {
     }, 100);
 }
 
-// Сохранение пользователей в localStorage и файл
+// Сохранение пользователей в localStorage
 function saveUsersData() {
     // Сохраняем в localStorage
     localStorage.setItem('bunkerGameUsers', JSON.stringify(usersData));
     
-    // Сохраняем в файл users.json (автоматическое скачивание)
-    const dataStr = JSON.stringify(usersData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'users.json';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    console.log('Пользователи сохранены в localStorage и файл users.json:', usersData.length);
+    console.log('Пользователи сохранены в localStorage:', usersData.length);
 }
 
 // Функции модального окна авторизации
@@ -801,22 +788,12 @@ function shuffleArray(array) {
 }
 
 // UI HANDLERS
-function toggleNumberGrid(event) {
-    if(isGameStarted) return;
-    document.getElementById('roles-menu').classList.remove('show');
-    document.getElementById('number-grid').classList.toggle('show');
-}
-function selectPlayers(num) {
-    selectedPlayersCount = num;
-    const textEl = document.getElementById('players-trigger-text');
-    textEl.innerText = `ИГРОКОВ: ${num}`;
-    textEl.classList.add('active');
-    document.getElementById('number-grid').classList.remove('show');
-}
 function toggleRolesMenu(event) {
     if(isGameStarted) return;
-    document.getElementById('number-grid').classList.remove('show');
-    document.getElementById('roles-menu').classList.toggle('show');
+    const rolesMenu = document.getElementById('roles-menu');
+    if (rolesMenu) {
+        rolesMenu.classList.toggle('show');
+    }
 }
 function selectRole(roleName) {
     selectedRoleMode = roleName;
@@ -830,8 +807,10 @@ document.addEventListener('click', function(e) {
     let inside = false;
     btns.forEach(btn => { if (btn.contains(e.target)) inside = true; });
     if (!inside) {
-        document.getElementById('number-grid').classList.remove('show');
-        document.getElementById('roles-menu').classList.remove('show');
+        const rolesMenu = document.getElementById('roles-menu');
+        if (rolesMenu) {
+            rolesMenu.classList.remove('show');
+        }
     }
     // Закрытие меню реролла
     if (!e.target.classList.contains('card-settings-btn')) {
