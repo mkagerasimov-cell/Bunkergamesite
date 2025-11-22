@@ -19,13 +19,10 @@ let onlineUpdateInterval = null; // Интервал обновления онл
 
 // === API ФУНКЦИИ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ ===
 
-// Получение URL для Netlify Functions
+// Получение URL для Vercel Serverless Functions
 function getApiUrl(functionName) {
-    // В продакшене используем реальный URL, в разработке - локальный
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return `/.netlify/functions/${functionName}`;
-    }
-    return `/.netlify/functions/${functionName}`;
+    // Vercel использует путь /api/ для serverless functions
+    return `/api/${functionName}`;
 }
 
 // Загрузка пользователей с сервера
@@ -271,28 +268,51 @@ function switchAuthTab(tab) {
     
     // Обновляем вкладки - явно убираем/добавляем active
     if (tab === 'login') {
-        loginTab.classList.add('active');
-        registerTab.classList.remove('active');
-        loginForm.classList.add('active');
-        registerForm.classList.remove('active');
+        if (loginTab) loginTab.classList.add('active');
+        if (registerTab) registerTab.classList.remove('active');
+        if (loginForm) {
+            loginForm.classList.add('active');
+            loginForm.style.display = 'flex';
+        }
+        if (registerForm) {
+            registerForm.classList.remove('active');
+            registerForm.style.display = 'none';
+        }
     } else {
-        loginTab.classList.remove('active');
-        registerTab.classList.add('active');
-        loginForm.classList.remove('active');
-        registerForm.classList.add('active');
+        if (loginTab) loginTab.classList.remove('active');
+        if (registerTab) registerTab.classList.add('active');
+        if (loginForm) {
+            loginForm.classList.remove('active');
+            loginForm.style.display = 'none';
+        }
+        if (registerForm) {
+            registerForm.classList.add('active');
+            registerForm.style.display = 'flex';
+        }
     }
     
     // Обновляем заголовок
-    document.getElementById('auth-modal-title').textContent = tab === 'login' ? 'АВТОРИЗАЦИЯ' : 'РЕГИСТРАЦИЯ';
+    const titleEl = document.getElementById('auth-modal-title');
+    if (titleEl) {
+        titleEl.textContent = tab === 'login' ? 'АВТОРИЗАЦИЯ' : 'РЕГИСТРАЦИЯ';
+    }
     
     // Очищаем сообщения
-    document.getElementById('auth-login-message').textContent = '';
-    document.getElementById('auth-login-message').className = 'auth-message';
-    document.getElementById('auth-register-message').textContent = '';
-    document.getElementById('auth-register-message').className = 'auth-message';
+    const loginMsg = document.getElementById('auth-login-message');
+    if (loginMsg) {
+        loginMsg.textContent = '';
+        loginMsg.className = 'auth-message';
+    }
+    const registerMsg = document.getElementById('auth-register-message');
+    if (registerMsg) {
+        registerMsg.textContent = '';
+        registerMsg.className = 'auth-message';
+    }
+    
+    console.log('Переключена вкладка:', tab, 'loginForm active:', loginForm?.classList.contains('active'), 'registerForm active:', registerForm?.classList.contains('active'));
 }
 
-function handleLogin() {
+async function handleLogin() {
     const username = document.getElementById('auth-login-username').value.trim();
     const password = document.getElementById('auth-login-password').value.trim();
     const messageEl = document.getElementById('auth-login-message');
@@ -303,7 +323,21 @@ function handleLogin() {
         return;
     }
     
-    const user = usersData.find(u => u.username === username && u.password === password);
+    // Убеждаемся, что usersData загружены
+    if (usersData.length === 0) {
+        console.log('Пользователи не загружены, загружаем с сервера...');
+        await loadUsersFromServer();
+    }
+    
+    console.log('Поиск пользователя:', username, 'в базе из', usersData.length, 'пользователей');
+    console.log('Все пользователи:', usersData.map(u => ({ username: u.username, hasPassword: !!u.password })));
+    
+    const user = usersData.find(u => {
+        const usernameMatch = u.username === username;
+        const passwordMatch = u.password === password;
+        console.log(`Проверка пользователя ${u.username}: username=${usernameMatch}, password=${passwordMatch}`);
+        return usernameMatch && passwordMatch;
+    });
     
     if (user) {
         // Убеждаемся, что используем актуальные данные пользователя
@@ -324,6 +358,7 @@ function handleLogin() {
             closeAuthModal();
         }, 1000);
     } else {
+        console.error('Пользователь не найден. Проверьте логин и пароль.');
         messageEl.textContent = 'Неверный логин или пароль!';
         messageEl.className = 'auth-message error';
     }

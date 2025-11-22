@@ -404,14 +404,14 @@ html, body {
 }
 
 .auth-form {
-    display: none;
+    display: none !important;
     flex-direction: column;
     gap: 20px;
     min-height: auto;
 }
 
 .auth-form.active {
-    display: flex;
+    display: flex !important;
 }
 
 .auth-input-group {
